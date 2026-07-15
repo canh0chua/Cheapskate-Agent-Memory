@@ -82,17 +82,32 @@ def consolidate_memories(
             return 1
 
         print("Running Claude Code consolidation...")
-        proc = subprocess.run(
-            [claude_path, "-p", prompt],
-            capture_output=True,
-            text=True,
-        )
-        if proc.returncode != 0:
-            print(f"Claude Code failed: {proc.stderr}", file=sys.stderr)
+        try:
+            proc = subprocess.run(
+                [claude_path, "-p", prompt],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired:
+            print("Claude Code consolidation timed out after 30 seconds.", file=sys.stderr)
+            db.close()
+            return 1
+        except Exception as e:
+            print(f"Failed to run Claude Code: {e}", file=sys.stderr)
             db.close()
             return 1
 
-        print(proc.stdout)
+        if proc.returncode != 0:
+            print(f"Claude Code failed: {proc.stderr.strip()}", file=sys.stderr)
+            db.close()
+            return 1
+
+        # Limit output size to prevent memory issues
+        output = proc.stdout
+        if len(output) > 100_000:
+            output = output[:100_000] + "\n[OUTPUT TRUNCATED]"
+        print(output)
         db.set_state(f"last_consolidate_{project}", datetime.now(timezone.utc).isoformat())
         db.close()
         return 0

@@ -44,7 +44,11 @@ def memory_status(memory_dir: Optional[Path] = None) -> int:
         last_consolidate = db.get_state("last_consolidate_default")
         if last_consolidate:
             try:
-                ts = datetime.fromisoformat(last_consolidate)
+                # Handle 'Z' suffix for UTC timezone
+                ts_str = last_consolidate
+                if ts_str.endswith("Z"):
+                    ts_str = ts_str[:-1] + "+00:00"
+                ts = datetime.fromisoformat(ts_str)
                 ago = datetime.now(timezone.utc) - ts.replace(tzinfo=None)
                 print(f"Last consolidate: {ts.strftime('%Y-%m-%d %H:%M:%S')} ({_format_timedelta(ago)})")
             except Exception:
@@ -56,7 +60,11 @@ def memory_status(memory_dir: Optional[Path] = None) -> int:
         last_prune = db.get_state("last_prune")
         if last_prune:
             try:
-                ts = datetime.fromisoformat(last_prune)
+                # Handle 'Z' suffix for UTC timezone
+                ts_str = last_prune
+                if ts_str.endswith("Z"):
+                    ts_str = ts_str[:-1] + "+00:00"
+                ts = datetime.fromisoformat(ts_str)
                 ago = datetime.now(timezone.utc) - ts.replace(tzinfo=None)
                 print(f"Last prune: {ts.strftime('%Y-%m-%d %H:%M:%S')} ({_format_timedelta(ago)})")
             except Exception:

@@ -37,7 +37,17 @@ def get_topics_dir(project: str) -> Path:
 
 def format_memory_for_index(mem: Dict) -> str:
     """Format a memory entry for the index."""
-    timestamp = datetime.fromisoformat(mem.get("timestamp", "")).strftime("%Y-%m-%d")
+    ts_str = mem.get("timestamp", "")
+    try:
+        # Handle 'Z' suffix for UTC timezone
+        if ts_str.endswith("Z"):
+            ts_str = ts_str[:-1] + "+00:00"
+        dt = datetime.fromisoformat(ts_str)
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
+        timestamp = dt.strftime("%Y-%m-%d")
+    except Exception:
+        timestamp = "unknown"
     content = mem["content"].strip()
 
     # Truncate long entries

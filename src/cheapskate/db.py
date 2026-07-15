@@ -320,17 +320,24 @@ class Database:
         return results[:limit]
 
     def _sanitize_fts_query(self, query: str) -> str:
-        """Sanitize user input for FTS5 query."""
+        """Sanitize user input for FTS5 query.
+        
+        FTS5 doesn't support escaping '+' (AND operator), so we strip it for FTS5 matching.
+        The vector/HHR reranking handles semantic matching on the original query.
+        Preserves dots and hyphens (node.js, Python-3.8, git-commit).
+        Strips FTS5 special characters: : " ^ ( ) [ ] { } *
+        """
         if not query or not query.strip():
             return ""
-        # Escape special FTS5 characters and wrap for prefix search
-        # Split into words and add * suffix for prefix matching
+        import re
         words = query.split()
         sanitized_words = []
         for word in words:
-            # Remove FTS5 special characters
-            clean = "".join(c for c in word if c.isalnum() or c.isspace())
-            if clean:
+            # FTS5 '+' is an AND operator - strip it since we can't escape it
+            clean = word.replace('+', '')
+            # Remove other FTS5 special characters
+            clean = re.sub(r'["^()\[\]{}:*]', '', clean)
+            if len(clean) >= 1:
                 sanitized_words.append(clean + "*")
         return " ".join(sanitized_words)
 

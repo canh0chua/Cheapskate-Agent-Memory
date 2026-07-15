@@ -275,8 +275,8 @@ def topicify_memories(
         topics_dir = get_topics_dir(project)
         topics_dir.mkdir(parents=True, exist_ok=True)
 
-        if group_by == "tags" or (group_by == "auto" and group_by != "vector"):
-            # Group by tags
+        if group_by == "tags":
+            # Group by tags only
             groups = group_memories_by_tags(memories)
 
             for tag, group_memories in groups.items():
