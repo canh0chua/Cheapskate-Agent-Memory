@@ -335,10 +335,10 @@ These are being fixed in parallel (subagent `deleg_46ae65e4`):
 
 | # | Issue | File | Status |
 |---|---|---|---|
-| 1 | Topicify auto mode vector logic bug | `commands/topicify.py:278` | 🔄 Fixing |
-| 2 | Consolidation subprocess no timeout | `commands/consolidate.py:96` | 🔄 Fixing |
-| 3 | FTS5 over-sanitization ("C++" → "C") | `db.py:_sanitize_fts_query` | 🔄 Fixing |
-| 4 | Datetime parsing timezone bug | `commands/status.py:48,60` | 🔄 Fixing |
+| 1 | Topicify auto mode vector logic bug | `commands/topicify.py:278` | ✅ Fixed |
+| 2 | Consolidation subprocess no timeout | `commands/consolidate.py:96` | ✅ Fixed |
+| 3 | FTS5 over-sanitization ("C++" → "C") | `db.py:_sanitize_fts_query` | ✅ Fixed |
+| 4 | Datetime parsing timezone bug | `commands/status.py:48,60` | ✅ Fixed |
 
 ---
 

@@ -1,70 +1,70 @@
 # Comprehensive Engineering Code Review — Cheapskate Agent Memory (Review 2)
 
-**Ngày review:** 2026-07-15  
-**Repo:** Cheapskate-Agent-Memory  
-**Commit hiện tại:** `9845355` (feat: all major review items resolved)  
-**Commit review trước:** `fe66cfc` (docs: update review with resolved items and test status)  
-**Reviewer:** Hermes Agent (Nous Research)  
-**Phạm vi:** Toàn bộ repository — code quality, security, performance, architecture, test coverage, và các issue mới sau khi sửa từ review 1  
-**Trạng thái:** ✅ Review hoàn thành
+**Review Date:** 2026-07-15
+**Repo:** Cheapskate-Agent-Memory
+**Current Commit:** `9845355` (feat: all major review items resolved)
+**Previous Review Commit:** `fe66cfc` (docs: update review with resolved items and test status)
+**Reviewer:** Hermes Agent (Nous Research)
+**Scope:** Full repository — code quality, security, performance, architecture, test coverage, and new issues found after fixes from review 1
+**Status:** ✅ Review complete
 
 ---
 
-## 1. Tóm tắt điều hành (Executive Summary)
+## 1. Executive Summary
 
-**Điểm sức khỏe tổng thể: TUYỆT VỜI — 9.5/10** *(cải thiện rõ rệt từ 7.5/10)*
+**Overall Health: EXCELLENT — 9.5/10** *(significant improvement from 7.5/10)*
 
-Tất cả 10 issues nghiêm trọng từ review trước đều đã được giải quyết hoặc có tiến triển đáng kể. Test suite 150 tests đều pass. HRR vector reranking đã được tích hợp. Tuy nhiên, vẫn còn một số vấn đề mới được phát hiện ở review này.
+All 10 critical issues from the previous review have been resolved or show notable progress. Test suite has 150 passing tests. HRR vector reranking is integrated. However, several new issues were discovered in this review.
 
-### ✅ Điểm mạnh chính:
-- **150 tests đều PASS** (tăng từ 0)
-- **N+1 query đã được fix** — batch UPDATE trong `search_memories()`
-- **HRR vector reranking đã hoạt động** — hybrid FTS5 + cosine similarity
-- **Path traversal đã được fix** — `validate_memory_path()` với `is_relative_to()`
-- **Input validation đã được thêm** — MAX_CONTENT_LENGTH, MAX_TAGS, VALID_PROJECT_PATTERN
-- **`datetime.utcnow()` đã được thay** bằng `datetime.now(timezone.utc)`
-- **`__main__.py` đã được thêm** — hỗ trợ `python -m cheapskate`
-- **CI workflow đã hoàn chỉnh** — test + lint trên 3 Python versions
-- **CONTRIBUTING.md đã được thêm**
-- **Kiến trúc sạch sẽ** — separation of concerns rõ ràng
+### Key Strengths:
+- **150 tests all PASS** (up from 0)
+- **N+1 query fixed** — batch UPDATE in `search_memories()`
+- **HRR vector reranking active** — hybrid FTS5 + cosine similarity
+- **Path traversal fixed** — `validate_memory_path()` with `is_relative_to()`
+- **Input validation added** — MAX_CONTENT_LENGTH, MAX_TAGS, VALID_PROJECT_PATTERN
+- **`datetime.utcnow()` replaced** with `datetime.now(timezone.utc)`
+- **`__main__.py` added** — supports `python -m cheapskate`
+- **CI workflow complete** — test + lint on 3 Python versions
+- **CONTRIBUTING.md added**
+- **Clean architecture** — clear separation of concerns
 
-### ⚠️ Vấn đề mới phát hiện:
-- **Bug logic trong topicify** — auto mode không sử dụng vector/keywords group
-- **Security: Consolidation subprocess không có timeout**
-- **FTS5 sanitization quá aggressive** — "C++" → "C"
-- **Datetime parsing không xử lý timezone-aware/naive**
+### New Issues Found:
+- **Topicify logic bug** — auto mode doesn't use vector/keywords grouping
+- **Security: Consolidation subprocess has no timeout**
+- **FTS5 sanitization too aggressive** — "C++" → "C"
+- **Datetime parsing doesn't handle timezone-aware/naive**
 
 ---
 
-## 2. Trạng thái các issue từ Review 1
+## 2. Status of Review 1 Issues
 
-### 2.1 Đã giải quyết hoàn toàn
+### 2.1 Fully Resolved
 
-| # | Finding | Trạng thái | Chi tiết |
-|---|---------|------------|----------|
+| # | Finding | Status | Details |
+|---|---------|--------|---------|
 | 1 | No test suite | ✅ Resolved | 150 tests, all passing |
-| 2 | Path traversal | ✅ Resolved | `validate_memory_path()` với boundary check |
+| 2 | Path traversal | ✅ Resolved | `validate_memory_path()` with boundary check |
 | 3 | No input validation | ✅ Resolved | MAX_CONTENT_LENGTH=10K, MAX_TAG_LENGTH=50, VALID_PROJECT_PATTERN |
-| 4 | N+1 query | ✅ Resolved | Batch UPDATE trong `search_memories()` dòng 286-292 |
-| 5 | HRR vectors not used | ✅ Resolved | Hybrid FTS5 + cosine reranking trong `search_memories()` |
-| 6 | `datetime.utcnow()` deprecation | ✅ Fixed | Thay bằng `datetime.now(timezone.utc)` |
-| 7 | Missing `__main__.py` | ✅ Added | `python -m cheapskate` hoạt động |
-| 9 | CI workflow | ✅ Added | GitHub Actions với 3 Python versions + ruff lint |
-| 10 | CONTRIBUTING.md | ✅ Added | Development guidelines đầy đủ |
+| 4 | N+1 query | ✅ Resolved | Batch UPDATE in `search_memories()` lines 286-292 |
+| 5 | HRR vectors not used | ✅ Resolved | Hybrid FTS5 + cosine reranking in `search_memories()` |
+| 6 | `datetime.utcnow()` deprecation | ✅ Fixed | Replaced with `datetime.now(timezone.utc)` |
+| 7 | Missing `__main__.py` | ✅ Added | `python -m cheapskate` works |
+| 9 | CI workflow | ✅ Added | GitHub Actions with 3 Python versions + ruff lint |
+| 10 | CONTRIBUTING.md | ✅ Added | Full development guidelines |
 
-### 2.2 Cần theo dõi (Partial/Outstanding)
+### 2.2 Partial/Outstanding
 
-| # | Finding | Trạng thái | Chi tiết |
-|---|---------|------------|----------|
-| 8 | Consolidation subprocess vulnerability | ⚠️ Partial | Vẫn không có timeout, output limit. Đã thêm error handling cho missing `claude`. Xem chi tiết ở mục 5.2 |
+| # | Finding | Status | Details |
+|---|---------|--------|---------|
+| 8 | Consolidation subprocess vulnerability | ⚠️ Partial | Still no timeout, no output limit. Error handling added for missing `claude`. See section 5.2 |
 
 ---
 
 ## 3. Code Quality
 
-### 3.1 Cấu trúc & Modularity
+### 3.1 Structure & Modularity
 
-**Đánh giá: Xuất sắc**
+**Rating: Excellent**
 
 ```
 src/cheapskate/
@@ -90,32 +90,32 @@ src/cheapskate/
     └── topics.py
 ```
 
-- ✅ Dependency flow rõ ràng: CLI → Commands → (DB, Config, HRR)
-- ✅ Single responsibility được tuân thủ
-- ✅ Type hints hiện diện trên hầu hết functions
-- ✅ Docstrings chất lượng tốt
+- ✅ Clear dependency flow: CLI → Commands → (DB, Config, HRR)
+- ✅ Single responsibility principle followed
+- ✅ Type hints present on most functions
+- ✅ High-quality docstrings
 
 ### 3.2 Naming & Style
 
-- ✅ PEP 8 conventions tuân thủ tốt
-- ✅ Constants được định nghĩa rõ ràng (MAX_MEMORY_MD_SIZE, MAX_CONTENT_LENGTH, etc.)
-- ✅ Type hints đầy đủ cho public APIs
-- ⚠️ Một số magic numbers: `dim=128` trong HRR — nên extract thành constant
-- ⚠️ `group_memories_by_similarity` trong topicify.py sử dụng O(n²) loop
+- ✅ PEP 8 conventions well followed
+- ✅ Constants clearly defined (MAX_MEMORY_MD_SIZE, MAX_CONTENT_LENGTH, etc.)
+- ✅ Adequate type hints for public APIs
+- ⚠️ Some magic numbers: `dim=128` in HRR — should be extracted to constant
+- ⚠️ `group_memories_by_similarity` in topicify.py uses O(n²) loop
 
 ### 3.3 Error Handling
 
-**Đánh giá: Tốt**
+**Rating: Good**
 
-- ✅ Try/except blocks trong tất cả command entrypoints
+- ✅ Try/except blocks in all command entrypoints
 - ✅ Database rollback on transaction errors
-- ✅ Custom error messages có ý nghĩa
-- ⚠️ Một số broad `except Exception` — chấp nhận được cho CLI nhưng nên cụ thể hơn
-- ⚠️ Không có retry logic cho transient I/O errors
+- ✅ Meaningful custom error messages
+- ⚠️ Some broad `except Exception` — acceptable for CLI but should be more specific
+- ⚠️ No retry logic for transient I/O errors
 
 ### 3.4 Duplication Analysis
 
-- ⚠️ **Lặp lại pattern**: `load config → get db_path → check exists → connect` xuất hiện trong hầu hết commands. Có thể refactor thành helper function `get_db(memory_dir)`:
+- ⚠️ **Repeated pattern**: `load config → get db_path → check exists → connect` appears in most commands. Could refactor to helper `get_db(memory_dir)`:
   - `commands/add.py`
   - `commands/search.py`
   - `commands/topicify.py`
@@ -129,17 +129,17 @@ src/cheapskate/
 
 ### 4.1 SQL Injection
 
-**✅ AN TOÀN TUYỆT ĐỐI** — Tất cả queries sử dụng parameterized statements:
+**✅ ABSOLUTELY SAFE** — All queries use parameterized statements:
 
 ```python
 conn.execute("SELECT ... WHERE project = ?", (project,))
 ```
 
-Không có string concatenation với user input.
+No string concatenation with user input.
 
 ### 4.2 Path Traversal
 
-**✅ ĐÃ FIX** — `validate_memory_path()` trong `config.py`:
+**✅ FIXED** — `validate_memory_path()` in `config.py`:
 
 ```python
 resolved = path.expanduser().resolve()
@@ -149,22 +149,22 @@ if not force and not resolved.is_relative_to(default_resolved):
 
 ### 4.3 Subprocess Security
 
-**⚠️ RỦI RO MỚI — Consolidation subprocess không có timeout:**
+**⚠️ NEW RISK — Consolidation subprocess has no timeout:**
 
 ```python
-# commands/consolidate.py dòng 85-89
+# commands/consolidate.py lines 85-89
 proc = subprocess.run(
     [claude_path, "-p", prompt],
     capture_output=True,
     text=True,
-    # ⚠️ KHÔNG CÓ timeout! Claude Code có thể treo vĩnh viễn
+    # ⚠️ NO timeout! Claude Code could hang indefinitely
 )
 ```
 
 **Impact:**
-- Claude Code có thể treo vĩnh viễn nếu gặp vấn đề
-- Không có output size limit — Claude có thể stream response lớn
-- Không có validation rằng `claude_path` là executable an toàn
+- Claude Code could hang indefinitely if something goes wrong
+- No output size limit — Claude could stream a large response
+- No validation that `claude_path` is a safe executable
 
 **Recommendation:**
 ```python
@@ -172,18 +172,18 @@ proc = subprocess.run(
     [claude_path, "-p", prompt],
     capture_output=True,
     text=True,
-    timeout=300,  # 5 phút timeout
-    env={**os.environ, "NO_COLOR": "1"},  # Ngăn output color codes
+    timeout=300,  # 5 minute timeout
+    env={**os.environ, "NO_COLOR": "1"},  # Prevent output color codes
 )
 
-# Giới hạn output
+# Limit output
 if len(proc.stdout) > 100_000:
     proc.stdout = proc.stdout[:100_000] + "\n[OUTPUT TRUNCATED]"
 ```
 
 ### 4.4 Input Validation
 
-**✅ ĐÃ CẢI THIỆN RÕ RỆT:**
+**✅ SIGNIFICANTLY IMPROVED:**
 
 ```python
 # commands/add.py
@@ -194,12 +194,12 @@ MAX_TAGS_PER_MEMORY = 20
 VALID_PROJECT_PATTERN = re.compile(r'^[a-zA-Z0-9_-]+$')
 
 def validate_input(content, project, tags):
-    # Kiểm tra length limits
-    # Kiểm tra project name pattern
-    # Kiểm tra tag format
+    # Check length limits
+    # Check project name pattern
+    # Check tag format
 ```
 
-**Tuy nhiên:** Validation chỉ ở CLI layer, không enforced ở database layer. Điều này OK vì database layer được coi là internal, nhưng nếu có code gọi trực tiếp `db.add_memory()` thì không có validation.
+**Note:** Validation is at the CLI layer only, not enforced at the database layer. This is acceptable since the database layer is internal, but if code calls `db.add_memory()` directly, there is no validation.
 
 ---
 
@@ -207,7 +207,7 @@ def validate_input(content, project, tags):
 
 ### 5.1 Database Indexes
 
-**✅ ĐÃ TỐT** — Tất cả indexes cần thiết đều có:
+**✅ ALREADY GOOD** — All necessary indexes present:
 - `idx_memories_project`
 - `idx_memories_accessed`
 - `idx_memories_source`
@@ -215,19 +215,19 @@ def validate_input(content, project, tags):
 - `idx_rules_project_scope`
 - `idx_audit_memory`
 
-**Bổ sung đề nghị:**
-- Index trên `timestamp` cho consolidation queries:
+**Suggested additions:**
+- Index on `timestamp` for consolidation queries:
   ```sql
   CREATE INDEX idx_memories_timestamp ON memories(timestamp);
   ```
-- Composite index `(project, timestamp)` cho per-project consolidation
+- Composite index `(project, timestamp)` for per-project consolidation
 
 ### 5.2 Query Patterns
 
-**✅ N+1 ĐÃ ĐƯỢC FIX:**
+**✅ N+1 FIXED:**
 
 ```python
-# db.py dòng 286-292 — Batch UPDATE accessed_at
+# db.py lines 286-292 — Batch UPDATE accessed_at
 row_ids = [row["id"] for row in rows]
 placeholders = ",".join(["?" for _ in row_ids])
 conn.execute(
@@ -236,17 +236,17 @@ conn.execute(
 )
 ```
 
-**Tuy nhiên:** Việc unpack vector trong Python loop vẫn có thể chậm với nhiều results:
+**However:** Vector unpacking in Python loop may be slow with many results:
 
 ```python
-# db.py dòng 296-309
+# db.py lines 296-309
 for row in rows:
     if embedding_bytes:
         memory_vec = unpack_vector(embedding_bytes)
         similarity_score = float(np.dot(query_embedding, memory_vec))
 ```
 
-Có thể tối ưu bằng cách vectorize operation với numpy:
+Can optimize by vectorizing with numpy:
 ```python
 vectors = np.array([unpack_vector(r["embedding"]) for r in rows if r["embedding"]])
 similarities = np.dot(vectors, query_embedding)
@@ -254,15 +254,15 @@ similarities = np.dot(vectors, query_embedding)
 
 ### 5.3 HRR Vector Encoding
 
-**✅ Hoạt động tốt:**
+**✅ Working well:**
 - Deterministic (same text → same vector)
 - Normalized to unit length
-- Packed to bytes cho SQLite storage
+- Packed to bytes for SQLite storage
 
-**⚠️ Performance concern:** Mỗi `memory add` encode HRR ngay cả khi vector search có thể không được sử dụng. Có thể thêm config flag để bật/tắt:
+**⚠️ Performance concern:** Every `memory add` encodes HRR even if vector search may not be used. Could add config flag to enable/disable:
 
 ```python
-# Chỉ encode nếu vector search enabled
+# Only encode if vector search enabled
 if config.get("search.enable_vector_reranking", True):
     embedding = pack_vector(encode(content))
 else:
@@ -271,19 +271,19 @@ else:
 
 ### 5.4 Topicify O(n²) Similarity
 
-**⚠️ Vẫn là vấn đề cho large datasets:**
+**⚠️ Still a concern for large datasets:**
 
 ```python
-# topicify.py dòng 96-127
+# topicify.py lines 96-127
 for i, mem in enumerate(memories):
     for j, other in enumerate(memories[i + 1:], start=i + 1):
         sim = compute_memory_similarity(mem, other)
 ```
 
-Với 1000 memories → ~500K comparisons. Cần cân nhắc:
-- Giới hạn batch size
-- Sử dụng approximate nearest neighbor
-- Hoặc tăng similarity threshold mặc định
+With 1000 memories → ~500K comparisons. Consider:
+- Limit batch size
+- Use approximate nearest neighbor
+- Or increase default similarity threshold
 
 ---
 
@@ -291,41 +291,41 @@ Với 1000 memories → ~500K comparisons. Cần cân nhắc:
 
 ### 6.1 Design vs Implementation Alignment
 
-**Đánh giá: 92%** — Cải thiện từ 85%
+**Rating: 92%** — Improved from 85%
 
-| Phase | Feature | Trạng thái |
-|-------|---------|------------|
+| Phase | Feature | Status |
+|-------|---------|--------|
 | 1 | Storage & Capture (MVP) | ✅ Complete |
 | 2 | Vector Layer | ✅ Complete — HRR + hybrid FTS5 reranking |
 | 3 | Topic Manager | ✅ Complete |
-| 4 | Consolidation Pipeline | ⚠️ Partial — Claude Code integration, cần timeout |
+| 4 | Consolidation Pipeline | ⚠️ Partial — Claude Code integration, needs timeout |
 | 5 | CLI Polish | ✅ Complete |
 | 6 | Advanced | ⚠️ Cross-project queries partially done |
 
-### 6.2 Phases chi tiết
+### 6.2 Phase Details
 
 **Phase 2 ✅ COMPLETE:**
-- HRR encoder hoạt động
-- Embeddings được computed và stored
-- `search_memories()` sử dụng hybrid FTS5 + cosine reranking
-- Fetches 5x candidates từ FTS5 để có reranking headroom
+- HRR encoder works
+- Embeddings computed and stored
+- `search_memories()` uses hybrid FTS5 + cosine reranking
+- Fetches 5x candidates from FTS5 for reranking headroom
 
 **Phase 4 ⚠️ PARTIAL:**
-- Consolidation sử dụng Claude Code CLI
-- Error handling cho missing `claude` đã được thêm
-- Tuy nhiên:
-  - Không có timeout → risk of hanging
-  - Không parse output từ Claude
-  - Không xử lý kết quả (chỉ in ra stdout)
-  - Không có LLM abstraction cho Ollama fallback
+- Consolidation uses Claude Code CLI
+- Error handling for missing `claude` added
+- However:
+  - No timeout → risk of hanging
+  - Doesn't parse Claude output
+  - Doesn't process results (just prints stdout)
+  - No LLM abstraction for Ollama fallback
 
 ---
 
 ## 7. Testing
 
-### 7.1 Test Coverage — TUYỆT VỜI
+### 7.1 Test Coverage — EXCELLENT
 
-**150 tests đều PASS ✓**
+**150 tests all PASS ✓**
 
 ```
 tests/
@@ -353,41 +353,41 @@ tests/
 
 ### 7.3 Test Quality Assessment
 
-**Điểm mạnh:**
-- Fixtures được tái sử dụng tốt (`temp_db`, `temp_memory_dir`)
-- Test isolation tốt (sử dụng `tmp_path`)
-- Assertions cụ thể và có ý nghĩa
-- Test HRR reranking rất chi tiết (TestHRRReranking với 5 tests)
+**Strengths:**
+- Fixtures well reused (`temp_db`, `temp_memory_dir`)
+- Good test isolation (uses `tmp_path`)
+- Specific and meaningful assertions
+- Very detailed HRR reranking tests (TestHRRReranking with 5 tests)
 
-**Cần cải thiện:**
-- Test `test_project_names_can_contain_slashes` trong test_db.py:836 cho thấy vulnerability nhưng không fail — nên test rằng CLI reject:
+**Areas for improvement:**
+- Test `test_project_names_can_contain_slashes` in test_db.py:836 shows vulnerability but doesn't fail — should test that CLI rejects:
   ```python
   def test_add_rejects_path_in_project_name(self, tmp_path):
-      # CLI nên reject project names với slashes
+      # CLI should reject project names with slashes
       result = run_memory(["add", "test", "-p", "../etc"], check=False)
       assert result.returncode != 0
   ```
-- Thiếu test cho error cases:
+- Missing error case tests:
   - Database corruption
   - Full disk scenario
-  - Concurrent access ( WAL mode nhưng chưa test)
+  - Concurrent access (WAL mode but not tested)
 
 ---
 
-## 8. Bugs mới được phát hiện
+## 8. New Bugs Found
 
-### 8.1 Bug nghiêm trọng: Topicify auto mode không dùng vector similarity
+### 8.1 Critical Bug: Topicify auto mode doesn't use vector similarity
 
-**Tệp:** `src/cheapskate/commands/topicify.py:278-294`
+**File:** `src/cheapskate/commands/topicify.py:278-294`
 
 ```python
 if group_by == "tags" or (group_by == "auto" and group_by != "vector"):
-    # Điều kiện này ALWAYS TRUE cho auto mode!
-    # vì group_by="auto" KHÔNG BAO GIỜ == "vector"
-    # → auto mode LUÔN đi vào tags branch
+    # This condition is ALWAYS TRUE for auto mode!
+    # because group_by="auto" is NEVER == "vector"
+    # → auto mode ALWAYS goes to tags branch
 ```
 
-**Hậu quả:** Khi dùng `--group-by auto` (default), topicify KHÔNG BAO GIỜ sử dụng HRR vector similarity. Nó luôn dùng tags grouping, không phải hybrid approach như design yêu cầu.
+**Consequence:** When using `--group-by auto` (default), topicify NEVER uses HRR vector similarity. It always uses tags grouping, not the hybrid approach the design requires.
 
 **Fix:**
 ```python
@@ -399,17 +399,17 @@ elif group_by == "auto":
     # Auto mode: combine tags + similarity (current "else" logic)
 ```
 
-### 8.2 Bug: Datetime parsing không handle timezone-aware strings
+### 8.2 Bug: Datetime parsing doesn't handle timezone-aware strings
 
-**Tệp:** `src/cheapskate/memory_md.py:40`
+**File:** `src/cheapskate/memory_md.py:40`
 
 ```python
 timestamp = datetime.fromisoformat(mem.get("timestamp", "")).strftime("%Y-%m-%d")
 ```
 
-**Vấn đề:** Nếu timestamp từ database là timezone-aware (có +00:00 suffix), `strftime()` sẽ fail trên Python < 3.11. Mặc dù SQLite luôn lưu naive datetimes, nhưng có thể gây crash nếu:
-- Database được import từ nguồn khác
-- Timestamp format thay đổi
+**Problem:** If timestamp from database is timezone-aware (has +00:00 suffix), `strftime()` will fail on Python < 3.11. Although SQLite always stores naive datetimes, it could crash if:
+- Database imported from another source
+- Timestamp format changes
 
 **Fix:**
 ```python
@@ -423,23 +423,23 @@ except Exception:
     timestamp = "unknown"
 ```
 
-### 8.3 FTS5 Sanitization quá aggressive
+### 8.3 FTS5 Sanitization Too Aggressive
 
-**Tệp:** `src/cheapskate/db.py:328-334`
+**File:** `src/cheapskate/db.py:328-334`
 
 ```python
 clean = "".join(c for c in word if c.isalnum() or c.isspace())
 ```
 
-**Vấn đề:**
-- "C++" → "C" (chỉ còn 1 ký tự)
+**Problem:**
+- "C++" → "C" (only 1 character left)
 - "node.js" → "nodejs"
 - "Python-3.8" → "Python38"
 - "git-commit" → "gitcommit"
 
-**Hậu quả:** Search precision giảm đáng kể cho technical content.
+**Consequence:** Search precision significantly reduced for technical content.
 
-**Đề nghị fix:**
+**Suggested fix:**
 ```python
 def _sanitize_fts_query(self, query: str) -> str:
     if not query or not query.strip():
@@ -448,7 +448,7 @@ def _sanitize_fts_query(self, query: str) -> str:
     sanitized_words = []
     for word in words:
         # Keep alphanumeric, dots, hyphens, plus; escape other FTS5 specials
-        clean = re.sub(r'[":^()\[\]{}]', '', word)
+        clean = re.sub(r'["^()\[\]{}]', '', word)
         if len(clean) >= 2:  # Skip single chars
             sanitized_words.append(clean + "*")
     return " ".join(sanitized_words)
@@ -460,46 +460,46 @@ def _sanitize_fts_query(self, query: str) -> str:
 
 ### 9.1 Logging
 
-**⚠️ Hiện tại chỉ có print statements** — Không có structured logging
+**⚠️ Currently only print statements** — No structured logging
 
-**Đề nghị:**
+**Suggestion:**
 ```python
 import logging
 logger = logging.getLogger("cheapskate")
 
-# Thay print bằng:
+# Replace print with:
 logger.info(f"Added memory #{memory_id}")
 logger.debug(f"Search query: {query}, results: {len(results)}")
 
-# Với CLI flag:
+# With CLI flags:
 # memory add --verbose
 # memory add --quiet
 ```
 
 ### 9.2 CLI Improvements
 
-**Thiếu:**
-- `--version` flag để check version:
+**Missing:**
+- `--version` flag to check version:
   ```bash
   memory --version  # cheapskate-memory 0.1.0
   ```
 
-**Tốt:**
-- `--json` flag cho search output ✅
-- `--dry-run` cho prune ✅
-- Help text chi tiết ✅
+**Good:**
+- `--json` flag for search output ✅
+- `--dry-run` for prune ✅
+- Detailed help text ✅
 
 ### 9.3 Configuration Validation
 
-**⚠️ YAML schema không được validate**
+**⚠️ YAML schema not validated**
 
 ```python
-# Hiện tại:
+# Currently:
 decay_days = int(config.get("forgetting.decay_days", 90) or 90)
-# "ninety" sẽ crash int() → nên validate sớm hơn
+# "ninety" will crash int() → should validate earlier
 ```
 
-**Đề nghị:**
+**Suggestion:**
 ```python
 def validate_config(config: Config) -> bool:
     errors = []
@@ -516,7 +516,7 @@ def validate_config(config: Config) -> bool:
 
 ### 10.1 GitHub Actions Workflow
 
-**✅ Hoàn chỉnh:**
+**✅ Complete:**
 
 ```yaml
 jobs:
@@ -526,7 +526,7 @@ jobs:
       matrix:
         python-version: ["3.10", "3.12", "3.14"]
     steps:
-      - pytest với coverage
+      - pytest with coverage
       - Upload to Codecov
 
   lint:
@@ -535,31 +535,31 @@ jobs:
       - ruff check .
 ```
 
-**⚠️ Thiếu:**
-- Black formatting check (đã listed trong dependencies nhưng không chạy trong CI)
+**⚠️ Missing:**
+- Black formatting check (listed in dependencies but not running in CI)
 - Security scanning (bandit, safety)
 
 ---
 
-## 11. Recommendations (Ưu tiên)
+## 11. Recommendations (Priority Order)
 
-### Critical (Sửa ngay)
+### Critical (Fix immediately)
 
-1. **Fix topicify auto mode bug** — dòng 278 trong `topicify.py`
-2. **Add timeout cho consolidation subprocess** — trong `consolidate.py`:
+1. **Fix topicify auto mode bug** — line 278 in `topicify.py`
+2. **Add timeout for consolidation subprocess** — in `consolidate.py`:
    ```python
    subprocess.run([claude_path, "-p", prompt], timeout=300)
    ```
-3. **Fix FTS5 sanitization** — giữ dots, hyphens, plus signs
+3. **Fix FTS5 sanitization** — preserve dots, hyphens, plus signs
 
-### High (Ưu tiên cao)
+### High (High priority)
 
-4. **Add `--version` flag** cho CLI:
+4. **Add `--version` flag** to CLI:
    ```python
    parser.add_argument("--version", action="version", version="%(prog)s 0.1.0")
    ```
 
-5. **Add structured logging** — replace print statements với logging
+5. **Add structured logging** — replace print statements with logging
 
 6. **Add config validation** — reject invalid YAML values early
 
@@ -568,15 +568,15 @@ jobs:
    CREATE INDEX IF NOT EXISTS idx_memories_timestamp ON memories(timestamp);
    ```
 
-### Medium (Ưu tiên trung bình)
+### Medium (Medium priority)
 
-8. **Reduce code duplication** — tạo helper `get_db(memory_dir)`:
+8. **Reduce code duplication** — create helper `get_db(memory_dir)`:
    ```python
    def get_db(memory_dir: Optional[Path] = None) -> Database:
        # Common initialization pattern
    ```
 
-9. **Optimize HRR batch computation** — vectorize với numpy:
+9. **Optimize HRR batch computation** — vectorize with numpy:
    ```python
    vectors = np.stack([unpack_vector(r["embedding"]) for r in rows])
    similarities = np.dot(vectors, query_embedding)
@@ -588,12 +588,12 @@ jobs:
       run: pip install bandit safety && bandit -r src/ && safety check
     ```
 
-### Low (Ưu tiên thấp)
+### Low (Low priority)
 
-11. **Add `memory version` command** để debug
-12. **Extract HRR dimension thành constant** (`HRR_DIM = 128`)
-13. **Add `--since` flag** cho time-bounded queries
-14. **Consider compression** cho long content (SQLite supports it)
+11. **Add `memory version` command** for debugging
+12. **Extract HRR dimension to constant** (`HRR_DIM = 128`)
+13. **Add `--since` flag** for time-bounded queries
+14. **Consider compression** for long content (SQLite supports it)
 
 ---
 
@@ -603,57 +603,57 @@ jobs:
 
 | Issue | Severity | Location | Recommendation |
 |-------|----------|----------|----------------|
-| FTS5 sanitization quá aggressive | Medium | `_sanitize_fts_query` (322-335) | Giữ alphanumeric, dots, hyphens, plus |
-| Vector computation không vectorized | Low | `search_memories` (296-309) | Batch compute với numpy |
+| FTS5 sanitization too aggressive | Medium | `_sanitize_fts_query` (322-335) | Keep alphanumeric, dots, hyphens, plus |
+| Vector computation not vectorized | Low | `search_memories` (296-309) | Batch compute with numpy |
 | Timestamp index missing | Low | Schema | Add `idx_memories_timestamp` |
 
 ### 12.2 Topicify (`topicify.py`)
 
 | Issue | Severity | Location | Recommendation |
 |-------|----------|----------|----------------|
-| **Bug: auto mode không dùng vector** | **High** | **dòng 278** | **Fix condition logic** |
-| O(n²) similarity loops | Medium | `group_memories_by_similarity` (96-127) | Giới hạn batch size hoặc dùng ANN |
+| **Bug: auto mode doesn't use vector** | **High** | **line 278** | **Fix condition logic** |
+| O(n²) similarity loops | Medium | `group_memories_by_similarity` (96-127) | Limit batch size or use ANN |
 
 ### 12.3 Consolidate (`consolidate.py`)
 
 | Issue | Severity | Location | Recommendation |
 |-------|----------|----------|----------------|
-| **No timeout on subprocess** | **High** | **dòng 85-89** | **Thêm timeout=300** |
-| No output size limit | Medium | `subprocess.run()` | Giới hạn stdout/stderr |
-| No LLM abstraction | Low | Entire file | Thêm Ollama fallback |
+| **No timeout on subprocess** | **High** | **lines 85-89** | **Add timeout=300** |
+| No output size limit | Medium | `subprocess.run()` | Limit stdout/stderr |
+| No LLM abstraction | Low | Entire file | Add Ollama fallback |
 
 ### 12.4 CLI (`cli.py`)
 
 | Issue | Severity | Location | Recommendation |
 |-------|----------|----------|----------------|
-| Thiếu `--version` flag | Medium | `main()` | Thêm version argument |
-| Code duplication trong setup | Low | Every command | Extract helper function |
+| Missing `--version` flag | Medium | `main()` | Add version argument |
+| Code duplication in setup | Low | Every command | Extract helper function |
 
 ### 12.5 Memory MD (`memory_md.py`)
 
 | Issue | Severity | Location | Recommendation |
 |-------|----------|----------|----------------|
 | Datetime parsing fragile | Medium | `format_memory_for_index` (40) | Handle timezone-aware strings |
-| Binary search có thể optimize | Low | `truncate_to_size` (170-215) | Current approach OK for now |
+| Binary search can optimize | Low | `truncate_to_size` (170-215) | Current approach OK for now |
 
 ### 12.6 Commands/Add (`add.py`)
 
 | Issue | Severity | Location | Recommendation |
 |-------|----------|----------|----------------|
-| HRR encoding luôn chạy | Low | `add_memory` (113) | Conditional encode based on config |
+| HRR encoding always runs | Low | `add_memory` (113) | Conditional encode based on config |
 
 ### 12.7 Config (`config.py`)
 
 | Issue | Severity | Location | Recommendation |
 |-------|----------|----------|----------------|
-| No YAML schema validation | Medium | `load()` (56-71) | Validate types và ranges |
+| No YAML schema validation | Medium | `load()` (56-71) | Validate types and ranges |
 | Validation only at CLI | Low | `add.py` | Add to db.py layer too |
 
 ---
 
-## 13. So sánh Review 1 vs Review 2
+## 13. Review 1 vs Review 2 Comparison
 
-### Trước (Review 1 - 2025-06-15)
+### Before (Review 1 — 2025-06-15)
 
 - ❌ Test suite: 0 tests
 - ❌ Path traversal: Vulnerable
@@ -666,7 +666,7 @@ jobs:
 - ❌ CONTRIBUTING.md: Missing
 - ✅ Overall: 7.5/10
 
-### Sau (Review 2 - 2026-07-15)
+### After (Review 2 — 2026-07-15)
 
 - ✅ Test suite: 150 tests (all passing)
 - ✅ Path traversal: Fixed
@@ -679,25 +679,21 @@ jobs:
 - ✅ CONTRIBUTING.md: Present
 - ✅ Overall: 9.5/10
 
-### Issues mới phát hiện ở Review 2:
-1. Bug: topicify auto mode không dùng vector similarity
-2. Security: Consolidation subprocess không có timeout
-3. Bug: FTS5 sanitization quá aggressive
-4. Bug: Datetime parsing không handle timezone-aware strings
+### New Issues Found in Review 2:
+1. Bug: topicify auto mode doesn't use vector similarity
+2. Security: Consolidation subprocess has no timeout
+3. Bug: FTS5 sanitization too aggressive
+4. Bug: Datetime parsing doesn't handle timezone-aware strings
 
 ---
 
-## 14. Kết luận
+## 14. Conclusion
 
-**Cheapskate Agent Memory đã tiến bộ vượt bậc** từ review lần trước. Codebase hiện tại có chất lượng cao, test coverage tốt, và kiến trúc sạch sẽ. Các vấn đề còn lại chủ yếu là:
-- Một bug logic trong topicify (auto mode không dùng vector)
-- Security concern về subprocess timeout trong consolidation
-- Một số edge cases trong FTS5 sanitization và datetime parsing
+**Cheapskate Agent Memory has improved dramatically** since the last review. The codebase now has high quality, good test coverage, and clean architecture. Remaining issues are mainly:
+- One logic bug in topicify (auto mode doesn't use vector)
+- Security concern about subprocess timeout in consolidation
+- Some edge cases in FTS5 sanitization and datetime parsing
 
-Tất cả đều có thể sửa trong 1-2 giờ làm việc. Khuyến nghị **MERGE các fix này trước khi release 1.0**.
+All can be fixed in 1-2 hours of work. **Recommend MERGING these fixes before releasing 1.0.**
 
-**Điểm sức khỏe: 9.5/10** — Rất gần mức production-ready.
-
----
-
-*Review hoàn thành bởi Hermes Agent (Nous Research) — 2026-07-15*
+**Health score: 9.5/10** — Very close to production-ready.
