@@ -10,8 +10,11 @@ from pathlib import Path
 from typing import Optional
 
 from cheapskate.commands.add import add_memory
+from cheapskate.commands.audit import audit_memories
+from cheapskate.commands.consolidate import consolidate_memories
 from cheapskate.commands.init import init_memory
 from cheapskate.commands.list import list_memories
+from cheapskate.commands.prune import prune_memories
 from cheapskate.commands.search import search_memories
 from cheapskate.commands.topicify import topicify_memories
 from cheapskate.commands.topics import manage_topics
@@ -255,6 +258,70 @@ Examples:
         help="Overwrite existing file",
     )
 
+    # Prune command
+    prune_parser = subparsers.add_parser("prune", help="Prune old memories")
+    prune_parser.add_argument(
+        "--project",
+        "-p",
+        default=None,
+        help="Project name (default: default)",
+    )
+    prune_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be pruned without deleting",
+    )
+    prune_parser.add_argument(
+        "--path",
+        type=Path,
+        default=None,
+        help="Memory directory path (default: ~/.memory)",
+    )
+
+    # Audit command
+    audit_parser = subparsers.add_parser("audit", help="Show recent memory changes")
+    audit_parser.add_argument(
+        "--project",
+        "-p",
+        default=None,
+        help="Project name (default: default)",
+    )
+    audit_parser.add_argument(
+        "--action",
+        "-a",
+        default=None,
+        choices=["add", "update", "prune", "contradict", "access"],
+        help="Filter by action type",
+    )
+    audit_parser.add_argument(
+        "--limit",
+        "-n",
+        type=int,
+        default=50,
+        help="Max entries (default: 50)",
+    )
+    audit_parser.add_argument(
+        "--path",
+        type=Path,
+        default=None,
+        help="Memory directory path (default: ~/.memory)",
+    )
+
+    # Consolidate command
+    consolidate_parser = subparsers.add_parser("consolidate", help="Consolidate memories via Claude Code")
+    consolidate_parser.add_argument(
+        "--project",
+        "-p",
+        default="default",
+        help="Project name (default: default)",
+    )
+    consolidate_parser.add_argument(
+        "--path",
+        type=Path,
+        default=None,
+        help="Memory directory path (default: ~/.memory)",
+    )
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -337,6 +404,28 @@ Examples:
             else:
                 topic_parser.print_help()
                 return 1
+
+        elif args.command == "prune":
+            project = getattr(args, "project", None)
+            return prune_memories(
+                project=project,
+                dry_run=args.dry_run,
+                memory_dir=args.path,
+            )
+
+        elif args.command == "audit":
+            return audit_memories(
+                project=args.project,
+                limit=args.limit,
+                action=args.action,
+                memory_dir=args.path,
+            )
+
+        elif args.command == "consolidate":
+            return consolidate_memories(
+                project=args.project,
+                memory_dir=args.path,
+            )
 
         elif args.command == "memory-md":
             project = args.project or "default"
