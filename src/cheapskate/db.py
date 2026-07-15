@@ -288,6 +288,74 @@ class Database:
             cursor = conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
             return cursor.rowcount > 0
 
+    def upsert_topic(
+        self,
+        project: str,
+        name: str,
+        summary: Optional[str] = None,
+        memory_ids: Optional[List[int]] = None,
+    ) -> int:
+        """Insert or update a topic. Returns topic ID."""
+        with self.transaction() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO topics (project, name, summary, memory_ids, last_updated)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(project, name) DO UPDATE SET
+                    summary = excluded.summary,
+                    memory_ids = excluded.memory_ids,
+                    last_updated = CURRENT_TIMESTAMP
+                """,
+                (project, name, summary, json.dumps(memory_ids or [])),
+            )
+            return cursor.lastrowid or conn.execute(
+                "SELECT id FROM topics WHERE project = ? AND name = ?",
+                (project, name)
+            ).fetchone()["id"]
+
+    def get_topics(self, project: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get all topics, optionally filtered by project."""
+        conn = self.connect()
+        if project:
+            cursor = conn.execute(
+                "SELECT * FROM topics WHERE project = ? ORDER BY name",
+                (project,),
+            )
+        else:
+            cursor = conn.execute("SELECT * FROM topics ORDER BY project, name")
+        rows = cursor.fetchall()
+        results = []
+        for row in rows:
+            result = dict(row)
+            if result.get("memory_ids"):
+                result["memory_ids"] = json.loads(result["memory_ids"])
+            results.append(result)
+        return results
+
+    def get_topic(self, project: str, name: str) -> Optional[Dict[str, Any]]:
+        """Get a single topic by project and name."""
+        conn = self.connect()
+        cursor = conn.execute(
+            "SELECT * FROM topics WHERE project = ? AND name = ?",
+            (project, name),
+        )
+        row = cursor.fetchone()
+        if row:
+            result = dict(row)
+            if result.get("memory_ids"):
+                result["memory_ids"] = json.loads(result["memory_ids"])
+            return result
+        return None
+
+    def delete_topic(self, project: str, name: str) -> bool:
+        """Delete a topic by project and name."""
+        with self.transaction() as conn:
+            cursor = conn.execute(
+                "DELETE FROM topics WHERE project = ? AND name = ?",
+                (project, name),
+            )
+            return cursor.rowcount > 0
+
     def get_stats(self) -> Dict[str, int]:
         """Get database statistics."""
         conn = self.connect()

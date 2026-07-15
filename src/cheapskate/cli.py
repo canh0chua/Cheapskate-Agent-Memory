@@ -13,6 +13,9 @@ from cheapskate.commands.add import add_memory
 from cheapskate.commands.init import init_memory
 from cheapskate.commands.list import list_memories
 from cheapskate.commands.search import search_memories
+from cheapskate.commands.topicify import topicify_memories
+from cheapskate.commands.topics import manage_topics
+from cheapskate.memory_md import generate_memory_md
 
 
 def main():
@@ -30,6 +33,12 @@ Examples:
   memory list -p myapp                           List memories for a project
   memory search "port"                           Search memories
   memory search "docker" -p myapp -n 10         Search with project and limit
+  memory topicify -p myapp                       Auto-group memories into topics
+  memory topicify -p myapp --group-by tags       Group by tags only
+  memory topic list                              List existing topics
+  memory topic create debugging -p myapp -m 1,2  Create topic with linked memories
+  memory topic delete old-topic -p myapp          Delete a topic
+  memory memory-md -p myapp                      Generate MEMORY.md index
         """,
     )
 
@@ -128,6 +137,124 @@ Examples:
         help="Memory directory path (default: ~/.memory)",
     )
 
+    # Topicify command
+    topicify_parser = subparsers.add_parser("topicify", help="Auto-group memories into topics")
+    topicify_parser.add_argument(
+        "--project",
+        "-p",
+        default=None,
+        help="Project name (default: default)",
+    )
+    topicify_parser.add_argument(
+        "--threshold",
+        "-t",
+        type=float,
+        default=0.3,
+        help="Similarity threshold (0.0 to 1.0, default: 0.3)",
+    )
+    topicify_parser.add_argument(
+        "--group-by",
+        "-g",
+        choices=["auto", "tags", "vector", "keywords"],
+        default="auto",
+        help="Grouping strategy (default: auto)",
+    )
+    topicify_parser.add_argument(
+        "--auto",
+        "-a",
+        action="store_true",
+        help="Auto-create topics without prompting",
+    )
+    topicify_parser.add_argument(
+        "--path",
+        type=Path,
+        default=None,
+        help="Memory directory path (default: ~/.memory)",
+    )
+
+    # Topic subcommand (list/create/delete)
+    topic_parser = subparsers.add_parser("topic", help="Manage topics")
+    topic_subparsers = topic_parser.add_subparsers(dest="topic_action", help="Topic action")
+
+    # Topic list
+    topic_list_parser = topic_subparsers.add_parser("list", help="List topics")
+    topic_list_parser.add_argument(
+        "--project",
+        "-p",
+        default=None,
+        help="Filter by project name",
+    )
+    topic_list_parser.add_argument(
+        "--path",
+        type=Path,
+        default=None,
+        help="Memory directory path (default: ~/.memory)",
+    )
+
+    # Topic create
+    topic_create_parser = topic_subparsers.add_parser("create", help="Create a topic")
+    topic_create_parser.add_argument("name", help="Topic name")
+    topic_create_parser.add_argument(
+        "--project",
+        "-p",
+        default=None,
+        help="Project name (default: default)",
+    )
+    topic_create_parser.add_argument(
+        "--memory-ids",
+        "-m",
+        help="Comma-separated memory IDs to link",
+    )
+    topic_create_parser.add_argument(
+        "--path",
+        type=Path,
+        default=None,
+        help="Memory directory path (default: ~/.memory)",
+    )
+
+    # Topic delete
+    topic_delete_parser = topic_subparsers.add_parser("delete", help="Delete a topic")
+    topic_delete_parser.add_argument("name", help="Topic name")
+    topic_delete_parser.add_argument(
+        "--project",
+        "-p",
+        default=None,
+        help="Project name (default: default)",
+    )
+    topic_delete_parser.add_argument(
+        "--path",
+        type=Path,
+        default=None,
+        help="Memory directory path (default: ~/.memory)",
+    )
+    topic_delete_parser.add_argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="Skip confirmation",
+    )
+
+    # Memory-md command (generate MEMORY.md)
+    memory_md_parser = subparsers.add_parser("memory-md", help="Generate MEMORY.md index")
+    memory_md_parser.add_argument(
+        "--project",
+        "-p",
+        default=None,
+        help="Project name (default: default)",
+    )
+    memory_md_parser.add_argument(
+        "--path",
+        type=Path,
+        default=None,
+        help="Memory directory path (default: ~/.memory)",
+    )
+    memory_md_parser.add_argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="Overwrite existing file",
+    )
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -138,6 +265,7 @@ Examples:
     try:
         if args.command == "init":
             return init_memory(memory_dir=args.path, force=args.force)
+
         elif args.command == "add":
             tags = None
             if args.tags:
@@ -149,12 +277,14 @@ Examples:
                 source=args.source,
                 memory_dir=args.path,
             )
+
         elif args.command == "list":
             return list_memories(
                 project=args.project,
                 limit=args.limit,
                 memory_dir=args.path,
             )
+
         elif args.command == "search":
             return search_memories(
                 query=args.query,
@@ -163,11 +293,67 @@ Examples:
                 json_output=args.json,
                 memory_dir=args.path,
             )
+
+        elif args.command == "topicify":
+            project = args.project or "default"
+            return topicify_memories(
+                project=project,
+                memory_dir=args.path,
+                threshold=args.threshold,
+                group_by=args.group_by,
+                auto=args.auto,
+            )
+
+        elif args.command == "topic":
+            # Handle topic subcommands
+            memory_ids = None
+            if hasattr(args, "memory_ids") and args.memory_ids:
+                memory_ids = [int(x.strip()) for x in args.memory_ids.split(",")]
+
+            project = getattr(args, "project", None) or "default"
+
+            if args.topic_action == "list":
+                return manage_topics(
+                    action="list",
+                    project=args.project,
+                    memory_dir=args.path,
+                )
+            elif args.topic_action == "create":
+                return manage_topics(
+                    action="create",
+                    name=args.name,
+                    project=project,
+                    memory_ids=memory_ids,
+                    memory_dir=args.path,
+                )
+            elif args.topic_action == "delete":
+                return manage_topics(
+                    action="delete",
+                    name=args.name,
+                    project=project,
+                    memory_dir=args.path,
+                    force=args.force,
+                )
+            else:
+                topic_parser.print_help()
+                return 1
+
+        elif args.command == "memory-md":
+            project = args.project or "default"
+            return generate_memory_md(
+                project=project,
+                memory_dir=args.path,
+                force=args.force,
+            )
+
         else:
             parser.print_help()
             return 1
+
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
         return 1
 
 

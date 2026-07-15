@@ -1,0 +1,326 @@
+"""
+MEMORY.md generator for Cheapskate Agent Memory.
+
+Generates Claude Code compatible MEMORY.md index file with:
+- Topics table linking to topic files
+- Recent facts from memories
+- Quick reference section
+- 25KB cap with truncation
+"""
+
+import os
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional
+
+from cheapskate.config import Config
+from cheapskate.db import Database
+
+
+# Size limits
+MAX_MEMORY_MD_SIZE = 25 * 1024  # 25KB
+MAX_RECENT_FACTS = 50
+MAX_TOPICS_DISPLAY = 20
+
+
+def get_claude_memory_dir(project: str) -> Path:
+    """Get Claude Code compatible memory directory path."""
+    home = Path.home()
+    return home / ".claude" / "projects" / project / "memory"
+
+
+def get_topics_dir(project: str) -> Path:
+    """Get topics directory for a project."""
+    return get_claude_memory_dir(project) / "topics"
+
+
+def format_memory_for_index(mem: Dict) -> str:
+    """Format a memory entry for the index."""
+    timestamp = datetime.fromisoformat(mem.get("timestamp", "")).strftime("%Y-%m-%d")
+    content = mem["content"].strip()
+
+    # Truncate long entries
+    if len(content) > 200:
+        content = content[:200].rsplit(" ", 1)[0] + "..."
+
+    return f"- {content} ({timestamp})"
+
+
+def generate_topics_section(topics: List[Dict]) -> str:
+    """Generate the Topics section of MEMORY.md."""
+    if not topics:
+        return "## Topics\n\n_No topics yet. Run `memory topicify` to create topics._"
+
+    lines = ["## Topics", ""]
+
+    for topic in topics[:MAX_TOPICS_DISPLAY]:
+        name = topic.get("name", "unknown")
+        summary = topic.get("summary", "")
+        safe_name = name.lower().replace(" ", "-")
+
+        # Extract first line of summary as description
+        description = ""
+        if summary:
+            first_line = summary.strip().split("\n")[0]
+            # Remove markdown heading
+            description = first_line.lstrip("#*[-] ").strip()
+            if len(description) > 60:
+                description = description[:60].rsplit(" ", 1)[0] + "..."
+
+        if description:
+            lines.append(f"- [{name}](topics/{safe_name}.md) — {description}")
+        else:
+            lines.append(f"- [{name}](topics/{safe_name}.md)")
+
+    if len(topics) > MAX_TOPICS_DISPLAY:
+        lines.append(f"\n_...and {len(topics) - MAX_TOPICS_DISPLAY} more topics_")
+
+    return "\n".join(lines)
+
+
+def generate_recent_facts_section(memories: List[Dict]) -> str:
+    """Generate the Recent Facts section of MEMORY.md."""
+    if not memories:
+        return "## Recent Facts\n\n_No memories yet._"
+
+    lines = ["## Recent Facts", ""]
+
+    for mem in memories[:MAX_RECENT_FACTS]:
+        fact = format_memory_for_index(mem)
+        lines.append(fact)
+
+    if len(memories) > MAX_RECENT_FACTS:
+        lines.append(f"\n_...and {len(memories) - MAX_RECENT_FACTS} more memories_")
+
+    return "\n".join(lines)
+
+
+def generate_quick_reference_section(memories: List[Dict]) -> str:
+    """Generate Quick Reference section with extracted commands and patterns."""
+    # Extract potential quick references from memories
+    commands = []
+    patterns = []
+
+    for mem in memories[:100]:
+        content = mem.get("content", "")
+
+        # Look for command patterns (backtick-enclosed or starting with $)
+        if "`" in content:
+            parts = content.split("`")
+            for i, part in enumerate(parts):
+                if i % 2 == 1:  # Backtick-enclosed parts
+                    if " " in part and len(part) < 80:
+                        commands.append(part.strip())
+                elif part.startswith("$ "):
+                    cmd = part.split("\n")[0][2:].strip()
+                    if len(cmd) < 80:
+                        commands.append(cmd)
+
+    # Deduplicate commands
+    seen = set()
+    unique_commands = []
+    for cmd in commands:
+        if cmd and cmd not in seen and len(cmd) > 2:
+            seen.add(cmd)
+            unique_commands.append(cmd)
+
+    if not unique_commands:
+        return "## Quick Reference\n\n_Run `memory topicify` to extract patterns from memories._"
+
+    lines = ["## Quick Reference", ""]
+
+    for cmd in unique_commands[:15]:
+        lines.append(f"- `{cmd}`")
+
+    if len(unique_commands) > 15:
+        lines.append(f"\n_...and {len(unique_commands) - 15} more commands_")
+
+    return "\n".join(lines)
+
+
+def generate_memory_md_content(
+    project: str,
+    topics: List[Dict],
+    memories: List[Dict],
+) -> str:
+    """Generate the complete MEMORY.md content."""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    header = f"# Memory Index — {project}\n\n_Last updated: {now}_"
+    topics_section = generate_topics_section(topics)
+    recent_section = generate_recent_facts_section(memories)
+    quick_ref_section = generate_quick_reference_section(memories)
+
+    content = f"""{header}
+
+{topics_section}
+
+{recent_section}
+
+{quick_ref_section}
+
+---
+_Auto-generated by Cheapskate Agent Memory_
+"""
+
+    return content
+
+
+def truncate_to_size(content: str, max_size: int = MAX_MEMORY_MD_SIZE) -> str:
+    """Truncate content to fit within size limit."""
+    if len(content.encode("utf-8")) <= max_size:
+        return content
+
+    # Binary search for the right truncation point
+    lines = content.split("\n")
+
+    # Keep header, topics section, and at least some recent facts
+    # Start with header + 2 sections
+    min_lines = 5  # Header + some content
+
+    while len(content.encode("utf-8")) > max_size and len(lines) > min_lines:
+        # Remove from the middle (recent facts section)
+        # Find the "Recent Facts" section and truncate it
+        fact_marker = "\n## Recent Facts"
+        if fact_marker in content:
+            parts = content.split(fact_marker)
+            header = parts[0]
+            rest = fact_marker + parts[1]
+
+            # Reduce rest until it fits
+            while len((header + rest).encode("utf-8")) > max_size and "\n- " in rest:
+                # Remove one fact at a time from the middle of rest
+                idx = rest.rfind("\n- ", 0, len(rest) // 2)
+                if idx == -1:
+                    break
+                rest = rest[:idx]
+
+            content = header + rest + "\n\n_Truncated for size limit_"
+        else:
+            # No Recent Facts section, truncate from end
+            while len(content.encode("utf-8")) > max_size and "\n" in content:
+                content = content.rsplit("\n", 1)[0]
+            content += "\n\n_Truncated for size limit_"
+
+    return content
+
+
+def generate_memory_md(
+    project: str,
+    memory_dir: Optional[Path] = None,
+    force: bool = False,
+) -> int:
+    """
+    Generate MEMORY.md index file.
+
+    Args:
+        project: Project name
+        memory_dir: Path to memory directory
+        force: Overwrite existing file
+
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
+    try:
+        # Load config and get database path
+        if memory_dir:
+            config_path = memory_dir / "config.yaml"
+        else:
+            config_path = None
+        config = Config(config_path)
+        db_path = config.database_path
+
+        # Check if database exists
+        if not db_path.exists():
+            print(f"Memory not initialized. Run 'memory init' first.", file=sys.stderr)
+            return 1
+
+        # Connect to database
+        db = Database(db_path)
+        db.connect()
+
+        # Get topics and memories
+        topics = db.get_topics(project=project)
+        memories = db.list_memories(project=project, limit=MAX_RECENT_FACTS)
+
+        # Generate content
+        content = generate_memory_md_content(project, topics, memories)
+
+        # Apply size limit
+        original_size = len(content.encode("utf-8"))
+        content = truncate_to_size(content, MAX_MEMORY_MD_SIZE)
+        final_size = len(content.encode("utf-8"))
+
+        # Ensure directory exists
+        memory_path = get_claude_memory_dir(project)
+        memory_path.mkdir(parents=True, exist_ok=True)
+
+        filepath = memory_path / "MEMORY.md"
+
+        # Check if file exists and --force not set
+        if filepath.exists() and not force:
+            print(f"WARNING: {filepath} already exists.", file=sys.stderr)
+            print("Use --force to overwrite.", file=sys.stderr)
+            db.close()
+            return 1
+
+        # Write file
+        filepath.write_text(content, encoding="utf-8")
+
+        print(f"Generated {filepath}")
+        print(f"  Size: {final_size:,} bytes", end="")
+        if original_size > MAX_MEMORY_MD_SIZE:
+            print(f" (truncated from {original_size:,})")
+        else:
+            print()
+        print(f"  Topics: {len(topics)}")
+        print(f"  Recent facts: {min(len(memories), MAX_RECENT_FACTS)}")
+
+        db.close()
+        return 0
+
+    except Exception as e:
+        print(f"Error generating MEMORY.md: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        return 1
+
+
+def read_memory_md(project: str) -> Optional[str]:
+    """Read existing MEMORY.md for a project."""
+    filepath = get_claude_memory_dir(project) / "MEMORY.md"
+    if filepath.exists():
+        return filepath.read_text(encoding="utf-8")
+    return None
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate MEMORY.md index file")
+    parser.add_argument(
+        "--project", "-p",
+        default=None,
+        help="Project name (default: default)",
+    )
+    parser.add_argument(
+        "--path",
+        type=Path,
+        default=None,
+        help="Memory directory path (default: ~/.memory)",
+    )
+    parser.add_argument(
+        "--force", "-f",
+        action="store_true",
+        help="Overwrite existing file",
+    )
+
+    args = parser.parse_args()
+    project = args.project or "default"
+
+    sys.exit(generate_memory_md(
+        project=project,
+        memory_dir=args.path,
+        force=args.force,
+    ))
