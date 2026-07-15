@@ -2,7 +2,8 @@
 
 **Created:** 2026-07-15
 **Author:** Hermes Agent
-**Status:** Active — items being addressed in parallel
+**Status:** ✅ Complete — all phases implemented
+**Completed:** 2026-07-15 (commit ae295c1)
 **Based on:** agent-review-1.md, agent-review-2.md, integration gap analysis
 
 ---
@@ -346,18 +347,19 @@ These are being fixed in parallel (subagent `deleg_46ae65e4`):
 
 | Task | Phase | Priority | Status |
 |---|---|---|---|
-| MemoryClient Python API | 1 | 🔴 Critical | ⬜ Not started |
-| JSON output for all commands | 1 | 🔴 Critical | ⬜ Not started |
-| Confidence + provenance columns | 1 | 🟡 High | ⬜ Not started |
-| Update AGENTS.md with Python API | 1 | 🟡 High | ⬜ Not started |
-| Hook system (config.yaml) | 2 | 🔴 Critical | ⬜ Not started |
-| `memory suggest --from-pwd` | 2 | 🟡 High | ⬜ Not started |
-| Executable SKILL.md templates | 2 | 🟡 Medium | ⬜ Not started |
-| Integration tests for agent workflows | 2 | 🟡 Medium | ⬜ Not started |
-| Native Hermes MCP integration | 3 | 🔴 Critical | ⬜ Not started |
-| Memory verification loop | 3 | 🟡 Medium | ⬜ Not started |
-| Session continuity protocol | 3 | 🟡 Medium | ⬜ Not started |
-| Ollama fallback for consolidation | 3 | 🟡 Medium | ⬜ Not started |
+| MemoryClient Python API | 1 | 🔴 Critical | ✅ Complete |
+| JSON output for all commands | 1 | 🔴 Critical | ✅ Complete |
+| Confidence + provenance columns | 1 | 🟡 High | ✅ Complete |
+| Confidence-weighted search ranking | 1 | 🟡 High | ✅ Complete |
+| Update AGENTS.md with Python API | 1 | 🟡 High | ✅ Complete |
+| Hook system (config.yaml) | 2 | 🔴 Critical | ✅ Complete |
+| `memory suggest --from-pwd` | 2 | 🟡 High | ✅ Complete |
+| Executable SKILL templates | 2 | 🟡 Medium | ✅ Complete |
+| Integration tests for agent workflows | 2 | 🟡 Medium | ✅ Complete |
+| Native Hermes MCP integration | 3 | 🔴 Critical | ✅ Complete |
+| Memory verification loop | 3 | 🟡 Medium | ✅ Complete |
+| Session continuity protocol | 3 | 🟡 Medium | ✅ Complete |
+| Ollama fallback for consolidation | 3 | 🟡 Medium | ✅ Complete |
 | Cross-project memory queries | 3 | 🟡 Low | ⬜ Not started |
 | Fix topicify vector logic bug | — | 🔴 High | 🔄 In progress |
 | Fix consolidation subprocess timeout | — | 🔴 High | 🔄 In progress |
