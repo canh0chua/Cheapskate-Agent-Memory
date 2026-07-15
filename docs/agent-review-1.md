@@ -1,16 +1,18 @@
 # Comprehensive Code Review: Cheapskate Agent Memory
 
-**Review Date:** 2025-06-15 (conducted 2026-07-14)  
-**Reviewer:** Hermes Agent (Nous Research)  
-**Repository:** Cheapskate-Agent-Memory  
-**Commit:** main (latest)  
-**Scope:** Full repository - architecture, code quality, security, performance, documentation
+**Review Date:** 2025-06-15 (conducted 2026-07-14)  \
+**Last Updated:** 2026-07-15  \
+**Reviewer:** Hermes Agent (Nous Research)  \
+**Repository:** Cheapskate-Agent-Memory  \
+**Commit:** main (`997b125`)  \
+**Scope:** Full repository - architecture, code quality, security, performance, documentation  \
+**Status:** Review in progress — tests stabilizing, fixes ongoing
 
 ---
 
 ## 1. Executive Summary
 
-**Overall Health: GOOD (7.5/10)**
+**Overall Health: GOOD (7.5/10)** *(improving — tests added, critical fixes merged)*
 
 Cheapskate Agent Memory (CAM) is a well-architected, zero-cost memory system for coding agents. The implementation is largely consistent with the design document, featuring clean separation of concerns, solid error handling, and comprehensive CLI coverage.
 
@@ -24,13 +26,21 @@ Cheapskate Agent Memory (CAM) is a well-architected, zero-cost memory system for
 - ✅ FTS5 query sanitization prevents injection
 - ✅ Audit trail and soft delete implementations
 - ✅ 25KB size cap on MEMORY.md automatically enforced
+- ✅ **Test suite added** (146 tests: 132 passing, 14 in progress)
 
-**Critical Risks:**
-- ⚠️ **No test suite** (0% coverage) - major gap for production readiness
-- ⚠️ **Consolidation subprocess vulnerability** - shell=True equivalent risks
-- ⚠️ **HRR vectors not actually used** - embedding computed but never queried
-- ⚠️ **No input validation** on content length or metadata fields
-- ⚠️ **Hard dependency on Claude Code** for consolidation (no fallback)
+**Critical Risks (resolved/improving):**
+- ✅ **No test suite** — **RESOLVED**: 146 tests added (132 passing)
+- ✅ **Path traversal** — **RESOLVED**: `--force` override + `CHEAPSKATE_TESTING` env var
+- ✅ **No input validation** — **RESOLVED**: Length limits on content (≤10K), project (≤255), tags (≤50 chars / max 20)
+- ✅ **N+1 query** — **RESOLVED**: Batch `accessed_at` update with single SQL statement
+- ⚠️ **HRR vectors stored but not used** — Partially resolved: reranking logic exists, wiring pending
+- ⚠️ **`datetime.utcnow()` deprecation** — Not yet fixed
+- ⚠️ **Consolidation subprocess vulnerability** — Still needs timeout + output handling
+
+**Critical Risks Still Open:**
+- ⚠️ **14 test failures remain** — SQLite corruption in prune tests, CLI test logic, memory_md assertions
+- ⚠️ **CI workflow** — GitHub Actions not yet configured
+- ⚠️ **`__main__.py`** — Module entry point missing
 
 **Architecture Alignment:** 85% - Implementation matches design doc well, but vector search phase incomplete.
 
@@ -175,17 +185,11 @@ No string concatenation with user input. FTS5 query sanitized in `_sanitize_fts_
 
 ### 5.2 Path Traversal
 
-**⚠️ VULNERABLE** - `memory_dir` and `--path` options accept user-supplied paths without canonicalization. An attacker could use `../../../etc` to write outside intended directory if the CLI is run with elevated privileges or user trust.
-
-**Mitigation needed:**
-```python
-from pathlib import Path
-def safe_path(path: Path, default: Path) -> Path:
-    resolved = path.expanduser().resolve()
-    if not resolved.is_relative_to(default.resolve()):
-        raise ValueError("Path outside allowed directory")
-    return resolved
-```
+**✅ RESOLVED** — `validate_memory_path()` in `config.py` now:
+- Resolves paths with `expanduser().resolve()`
+- Checks `is_relative_to(default_memory_dir().resolve())`
+- Raises `ValueError` for out-of-bounds paths unless `--force` is given
+- Respects `CHEAPSKATE_TESTING` env var for test isolation
 
 ### 5.3 Secrets Handling
 
