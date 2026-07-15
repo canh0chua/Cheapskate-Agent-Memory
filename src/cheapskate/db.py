@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from cheapskate.config import default_memory_dir
+from cheapskate.hrr import encode, unpack_vector
 
 
 class Database:
@@ -221,8 +222,20 @@ class Database:
         project: Optional[str] = None,
         limit: int = 20,
     ) -> List[Dict[str, Any]]:
-        """Full-text search on memories using FTS5."""
+        """Full-text search on memories using FTS5, with optional HRR vector reranking.
+
+        Returns results reranked by cosine similarity to the query's HRR embedding.
+        """
+        import numpy as np
+
         conn = self.connect()
+
+        # Handle empty query
+        if not query or not query.strip():
+            return []
+
+        # Encode query for HRR reranking
+        query_embedding = encode(query)
 
         # Sanitize query for FTS5
         fts_query = self._sanitize_fts_query(query)
@@ -230,8 +243,8 @@ class Database:
         if project:
             cursor = conn.execute(
                 """
-                SELECT m.id, m.project, m.timestamp, m.source, m.content, m.abstract, m.accessed_at,
-                       rank
+                SELECT m.id, m.project, m.timestamp, m.source, m.content, m.abstract,
+                       m.accessed_at, m.embedding, rank
                 FROM memories m
                 JOIN memories_fts fts ON m.id = fts.rowid
                 WHERE memories_fts MATCH ?
@@ -244,8 +257,8 @@ class Database:
         else:
             cursor = conn.execute(
                 """
-                SELECT m.id, m.project, m.timestamp, m.source, m.content, m.abstract, m.accessed_at,
-                       rank
+                SELECT m.id, m.project, m.timestamp, m.source, m.content, m.abstract,
+                       m.accessed_at, m.embedding, rank
                 FROM memories m
                 JOIN memories_fts fts ON m.id = fts.rowid
                 WHERE memories_fts MATCH ?
@@ -257,18 +270,44 @@ class Database:
 
         rows = cursor.fetchall()
 
-        # Update accessed_at for retrieved memories
-        now = datetime.utcnow().isoformat()
-        for row in rows:
-            conn.execute(
-                "UPDATE memories SET accessed_at = ? WHERE id = ?",
-                (now, row["id"]),
-            )
+        if not rows:
+            return []
 
-        return [dict(row) for row in rows]
+        # Batch update accessed_at in a single query
+        now = datetime.utcnow().isoformat()
+        row_ids = [row["id"] for row in rows]
+        placeholders = ",".join(["?" for _ in row_ids])
+        conn.execute(
+            f"UPDATE memories SET accessed_at = ? WHERE id IN ({placeholders})",
+            (now, *row_ids),
+        )
+
+        # Rerank by HRR cosine similarity
+        results = []
+        for row in rows:
+            result = dict(row)
+            embedding_bytes = result.get("embedding")  # Use result dict, not row
+            if embedding_bytes:
+                try:
+                    memory_vec = unpack_vector(embedding_bytes)
+                    # Cosine similarity = dot product (vectors are pre-normalized)
+                    similarity_score = float(np.dot(query_embedding, memory_vec))
+                    result["vector_score"] = similarity_score
+                except Exception:
+                    result["vector_score"] = 0.0
+            else:
+                result["vector_score"] = 0.0
+            results.append(result)
+
+        # Sort by vector similarity (descending), fall back to FTS rank
+        results.sort(key=lambda r: (r.get("vector_score", 0), -r.get("rank", 999999)), reverse=True)
+
+        return results
 
     def _sanitize_fts_query(self, query: str) -> str:
         """Sanitize user input for FTS5 query."""
+        if not query or not query.strip():
+            return ""
         # Escape special FTS5 characters and wrap for prefix search
         # Split into words and add * suffix for prefix matching
         words = query.split()

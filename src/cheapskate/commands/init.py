@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from cheapskate.config import DEFAULT_CONFIG, Config, ensure_memory_dir
+from cheapskate.config import DEFAULT_CONFIG, Config, validate_memory_path
 from cheapskate.db import init_database
 
 
@@ -22,8 +22,9 @@ def init_memory(memory_dir: Optional[Path] = None, force: bool = False) -> int:
         Exit code (0 for success, 1 for error)
     """
     try:
-        # Ensure memory directory exists
-        memory_path = ensure_memory_dir(memory_dir)
+        # Validate memory directory path (prevent traversal unless forced)
+        memory_path = validate_memory_path(memory_dir, force=force)
+        memory_path.mkdir(parents=True, exist_ok=True)
         config_path = memory_path / "config.yaml"
         db_path = memory_path / "memory.db"
 

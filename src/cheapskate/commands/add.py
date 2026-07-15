@@ -2,13 +2,63 @@
 memory add command - Add a new memory entry.
 """
 
+import re
 import sys
 from pathlib import Path
 from typing import List, Optional
 
-from cheapskate.config import Config, default_memory_dir
+from cheapskate.config import Config, validate_memory_path
 from cheapskate.db import Database
 from cheapskate.hrr import encode, pack_vector
+
+
+# Input validation limits
+MAX_CONTENT_LENGTH = 10_000  # 10KB per memory
+MAX_PROJECT_LENGTH = 255
+MAX_TAG_LENGTH = 50
+MAX_TAGS_PER_MEMORY = 20
+VALID_PROJECT_PATTERN = re.compile(r'^[a-zA-Z0-9_-]+$')
+
+
+def validate_input(
+    content: str,
+    project: Optional[str] = None,
+    tags: Optional[List[str]] = None,
+) -> Optional[str]:
+    """
+    Validate memory input parameters.
+
+    Args:
+        content: The memory content to validate
+        project: Optional project name to validate
+        tags: Optional list of tags to validate
+
+    Returns:
+        Error message if validation fails, None if valid
+    """
+    # Validate content length
+    if len(content) > MAX_CONTENT_LENGTH:
+        return f"Content exceeds maximum length of {MAX_CONTENT_LENGTH} characters"
+
+    # Validate project name
+    if project is not None:
+        if len(project) > MAX_PROJECT_LENGTH:
+            return f"Project name exceeds maximum length of {MAX_PROJECT_LENGTH} characters"
+        if not VALID_PROJECT_PATTERN.match(project):
+            return "Project name must contain only alphanumeric characters, dashes, and underscores"
+
+    # Validate tags
+    if tags:
+        if len(tags) > MAX_TAGS_PER_MEMORY:
+            return f"Too many tags (max {MAX_TAGS_PER_MEMORY})"
+
+        for tag in tags:
+            if len(tag) > MAX_TAG_LENGTH:
+                return f"Tag '{tag[:20]}...' exceeds maximum length of {MAX_TAG_LENGTH} characters"
+            if not VALID_PROJECT_PATTERN.match(tag):
+                return f"Tag '{tag}' contains invalid characters (alphanumeric, dash, underscore only)"
+
+    return None
 
 
 def add_memory(
@@ -36,11 +86,17 @@ def add_memory(
         if not project:
             project = "default"
 
+        # Validate input
+        error = validate_input(content, project, tags)
+        if error:
+            print(f"Error: {error}", file=sys.stderr)
+            return 1
+
+        # Validate memory directory path
+        validated_dir = validate_memory_path(memory_dir, force=False)
+
         # Load config and get database path
-        if memory_dir:
-            config_path = memory_dir / "config.yaml"
-        else:
-            config_path = None
+        config_path = validated_dir / "config.yaml"
         config = Config(config_path)
         db_path = config.database_path
 
@@ -53,7 +109,7 @@ def add_memory(
         db = Database(db_path)
         db.connect()
 
-        # Encode content to HRR vector (optional, for Phase 2)
+        # Encode content to HRR vector
         embedding = pack_vector(encode(content))
 
         # Add memory

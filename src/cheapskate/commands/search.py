@@ -80,6 +80,7 @@ def search_memories(
                         "source": r["source"],
                         "content": r["content"],
                         "rank": r.get("rank"),
+                        "vector_score": r.get("vector_score"),
                     }
                     for r in results
                 ],

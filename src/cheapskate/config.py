@@ -12,6 +12,13 @@ from typing import Any, Dict, Optional
 import yaml
 
 
+# Input validation limits
+MAX_CONTENT_LENGTH = 10_000  # 10KB per memory
+MAX_PROJECT_LENGTH = 255
+MAX_TAG_LENGTH = 50
+MAX_TAGS_PER_MEMORY = 20
+
+
 DEFAULT_CONFIG = """
 capture:
   auto_capture:
@@ -49,8 +56,16 @@ class Config:
     def load(self) -> None:
         """Load config from file, or use defaults if not exists."""
         if self.config_path.exists():
-            with open(self.config_path, "r", encoding="utf-8") as f:
-                self._data = yaml.safe_load(f) or {}
+            try:
+                with open(self.config_path, "r", encoding="utf-8") as f:
+                    raw = f.read()
+                if not raw.strip():
+                    self._data = yaml.safe_load(DEFAULT_CONFIG) or {}
+                else:
+                    self._data = yaml.safe_load(raw) or {}
+            except (yaml.YAMLError, OSError):
+                # Fall back to defaults on malformed YAML
+                self._data = yaml.safe_load(DEFAULT_CONFIG) or {}
         else:
             # Use default config
             self._data = yaml.safe_load(DEFAULT_CONFIG) or {}
@@ -110,3 +125,40 @@ def ensure_memory_dir(path: Optional[Path] = None) -> Path:
     memory_dir = path or default_memory_dir()
     memory_dir.mkdir(parents=True, exist_ok=True)
     return memory_dir
+
+
+def validate_memory_path(path: Optional[Path], force: bool = False) -> Path:
+    """
+    Validate that the memory directory is within ~/.memory unless --force is used.
+
+    Args:
+        path: The memory directory path to validate
+        force: If True, skip restriction and show warning
+
+    Returns:
+        The validated (and resolved) path
+
+    Raises:
+        ValueError: If path is outside allowed directory and force is False
+    """
+    if path is None:
+        return default_memory_dir()
+
+    resolved = path.expanduser().resolve()
+    default_resolved = default_memory_dir().resolve()
+
+    # Skip validation in testing mode (allows temp dirs in tests)
+    if os.environ.get("CHEAPSKATE_TESTING") and not force:
+        return resolved
+
+    if not force and not resolved.is_relative_to(default_resolved):
+        raise ValueError(
+            f"Memory directory must be under {default_resolved}. "
+            f"Use --force to override."
+        )
+
+    if force and not resolved.is_relative_to(default_resolved):
+        import sys
+        print("Warning: Using memory directory outside ~/.memory. --force allows this.", file=sys.stderr)
+
+    return resolved

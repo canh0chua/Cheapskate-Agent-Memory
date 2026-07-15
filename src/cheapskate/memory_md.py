@@ -172,36 +172,45 @@ def truncate_to_size(content: str, max_size: int = MAX_MEMORY_MD_SIZE) -> str:
     if len(content.encode("utf-8")) <= max_size:
         return content
 
-    # Binary search for the right truncation point
-    lines = content.split("\n")
-
     # Keep header, topics section, and at least some recent facts
-    # Start with header + 2 sections
-    min_lines = 5  # Header + some content
+    fact_marker = "\n## Recent Facts"
+    if fact_marker in content:
+        parts = content.split(fact_marker, 1)
+        header = parts[0]
+        rest = fact_marker + parts[1]
 
-    while len(content.encode("utf-8")) > max_size and len(lines) > min_lines:
-        # Remove from the middle (recent facts section)
-        # Find the "Recent Facts" section and truncate it
-        fact_marker = "\n## Recent Facts"
-        if fact_marker in content:
-            parts = content.split(fact_marker)
-            header = parts[0]
-            rest = fact_marker + parts[1]
+        # Binary search: how many facts fit?
+        fact_lines = rest.split("\n")
+        lo, hi = 0, len(fact_lines)
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            trial = "\n".join(fact_lines[:mid])
+            if len((header + trial).encode("utf-8")) <= max_size:
+                lo = mid
+            else:
+                hi = mid - 1
 
-            # Reduce rest until it fits
-            while len((header + rest).encode("utf-8")) > max_size and "\n- " in rest:
-                # Remove one fact at a time from the middle of rest
-                idx = rest.rfind("\n- ", 0, len(rest) // 2)
-                if idx == -1:
-                    break
-                rest = rest[:idx]
+        fact_lines = fact_lines[:lo]
+        content = header + "\n".join(fact_lines)
+    else:
+        # No Recent Facts section — binary search on whole content
+        content_lines = content.split("\n")
+        lo, hi = 0, len(content_lines)
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            trial = "\n".join(content_lines[:mid])
+            if len(trial.encode("utf-8")) <= max_size:
+                lo = mid
+            else:
+                hi = mid - 1
+        content = "\n".join(content_lines[:lo])
 
-            content = header + rest + "\n\n_Truncated for size limit_"
-        else:
-            # No Recent Facts section, truncate from end
-            while len(content.encode("utf-8")) > max_size and "\n" in content:
-                content = content.rsplit("\n", 1)[0]
-            content += "\n\n_Truncated for size limit_"
+    # Append truncation marker
+    if len(content.encode("utf-8")) + 30 > max_size:
+        # Strip from end to make room
+        while len(content.encode("utf-8")) + 30 > max_size:
+            content = content.rsplit("\n", 1)[0]
+    content += "\n\n_Truncated for size limit_"
 
     return content
 
