@@ -20,6 +20,7 @@ Inspired by Claude Code's memory, Holographic's LLM-free storage, and tiered mem
 - **Topic management** — group related memories into named topic files
 - **Soft delete** — contradiction detection marks old facts instead of wiping them
 - **Audit trail** — every memory change is logged with reason and timestamp
+- **Auto-pilot for agents** — drop-in integration files make any coding agent self-drive CAM without native support
 
 ---
 
@@ -34,7 +35,7 @@ Inspired by Claude Code's memory, Holographic's LLM-free storage, and tiered mem
 ├─────────────┴──────────────────┴─────────────────┴──────────────┤
 │                    ~/.memory/memory.db                           │
 │                   ~/.claude/projects/*/memory/                   │
-└─────────────────────────────────────────────────────────────────┘
+└─────────────────���───────────────────────────────────────────────┘
 ```
 
 - **SQLite** — persistent storage for memories, topics, rules, and audit logs
@@ -210,6 +211,73 @@ memory stats -p myproject              # specific project
 
 ---
 
+## Agent Integration — Auto-Pilot
+
+**No native integration required.** Drop in an instruction file and your coding agent auto-drives CAM.
+
+```
+integration/
+├── AGENTS.md              ← generic instructions for any agent
+├── CLAUDE-code/
+│   └── CLAUDE.md          ← paste into Claude Code's ~/.claude/CLAUDE.md
+└── hermes/
+    └── SKILL.md           ← Hermes skill (copy to ~/.hermes/skills/)
+```
+
+### How it works
+
+When an agent reads its instructions (CLAUDE.md, AGENTS.md, or a skill), it follows a self-driving loop:
+
+```
+Session start  →  memory search "context"   (load relevant facts)
+       ↓
+Agent discovers port/error/env/arch fact
+       ↓
+memory add "PostgreSQL on port 5432" -p myproject -t db
+       ↓
+End of meaningful session  →  memory topicify --auto
+       ↓
+Nightly cron  →  memory consolidate         (LLM synthesis, MEMORY.md update)
+```
+
+### What the agent auto-captures
+
+The agent is instructed to call `memory add` when it discovers:
+
+| Trigger | Example |
+|---|---|
+| Port numbers | "Backend on port 4000, PostgreSQL on 5432" |
+| Error + fix pairs | "Error: ECONNREFUSED → restart docker-compose" |
+| Non-standard commands | "Use `pnpm dev` not `npm run dev`" |
+| Env vars that matter | "DB_HOST=localhost is used in config" |
+| Architecture decisions | "API gateway pattern, auth via middleware" |
+| Service names | "Docker Compose service named `db`, not `postgres`" |
+| Config structures | "JWT secret goes in .env not config.yaml" |
+
+### Claude Code
+
+```bash
+# Copy the ready-to-use instructions
+cp integration/CLAUDE-code/CLAUDE.md ~/.claude/CLAUDE.md
+```
+
+Claude Code reads `~/.claude/CLAUDE.md` every session. It now knows to call `memory add` on the triggers above, run `memory search` at session start, and trigger consolidation.
+
+### Hermes
+
+```bash
+# Copy the skill
+cp -r integration/hermes ~/.hermes/skills/cheapskate-memory
+```
+
+The skill teaches Hermes the exact commands, trigger conditions, and pitfalls. Hermes loads it and auto-pilots CAM.
+
+### Other Agents (OpenCode, Roo Cline, etc.)
+
+Reference `integration/AGENTS.md` in the agent's system prompt, or adapt `integration/opencode/SKILL.md`.
+
+---
+
 ## Configuration
 
 Config file: `~/.memory/config.yaml`
@@ -254,7 +322,7 @@ The storage tier is completely offline. The only time you need an LLM is during 
 ~/.memory/
 ├── memory.db           # SQLite database
 ├── config.yaml         # optional config overrides
-└── memory.log          # audit log
+└── memory.index        # FAISS vector index
 
 ~/.claude/projects/<project>/memory/
 ├── MEMORY.md           # generated index (for Claude Code)
