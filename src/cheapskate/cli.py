@@ -332,6 +332,30 @@ Examples:
         help="Memory directory path (default: ~/.memory)",
     )
 
+    # Status command
+    status_parser = subparsers.add_parser("status", help="Show memory status and config summary")
+    status_parser.add_argument(
+        "--path",
+        type=Path,
+        default=None,
+        help="Memory directory path (default: ~/.memory)",
+    )
+
+    # Stats command
+    stats_parser = subparsers.add_parser("stats", help="Show memory statistics")
+    stats_parser.add_argument(
+        "--project",
+        "-p",
+        default=None,
+        help="Filter by project name",
+    )
+    stats_parser.add_argument(
+        "--path",
+        type=Path,
+        default=None,
+        help="Memory directory path (default: ~/.memory)",
+    )
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -446,6 +470,14 @@ Examples:
                 memory_dir=args.path,
                 force=args.force,
             )
+
+        elif args.command == "status":
+            from cheapskate.commands.status import memory_status
+            return memory_status(memory_dir=args.path)
+
+        elif args.command == "stats":
+            from cheapskate.commands.stats import memory_stats
+            return memory_stats(memory_dir=args.path, project=args.project)
 
         else:
             parser.print_help()
