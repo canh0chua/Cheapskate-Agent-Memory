@@ -225,6 +225,12 @@ class Database:
         """Full-text search on memories using FTS5, with optional HRR vector reranking.
 
         Returns results reranked by cosine similarity to the query's HRR embedding.
+
+        Hybrid ranking approach:
+        - Fetches 5x limit candidates from FTS5 to allow reranking headroom.
+        - Reranks by combining HRR cosine similarity (semantic) with FTS5 rank
+          (lexical). Higher vector similarity and lower FTS5 rank = higher score.
+        - Returns exactly `limit` results (top candidates after reranking).
         """
         import numpy as np
 
@@ -240,6 +246,9 @@ class Database:
         # Sanitize query for FTS5
         fts_query = self._sanitize_fts_query(query)
 
+        # Fetch 5x limit candidates from FTS5 to allow reranking headroom
+        fts_limit = limit * 5
+
         if project:
             cursor = conn.execute(
                 """
@@ -252,7 +261,7 @@ class Database:
                 ORDER BY rank
                 LIMIT ?
                 """,
-                (fts_query, project, limit),
+                (fts_query, project, fts_limit),
             )
         else:
             cursor = conn.execute(
@@ -265,7 +274,7 @@ class Database:
                 ORDER BY rank
                 LIMIT ?
                 """,
-                (fts_query, limit),
+                (fts_query, fts_limit),
             )
 
         rows = cursor.fetchall()
@@ -286,7 +295,7 @@ class Database:
         results = []
         for row in rows:
             result = dict(row)
-            embedding_bytes = result.get("embedding")  # Use result dict, not row
+            embedding_bytes = result.get("embedding")
             if embedding_bytes:
                 try:
                     memory_vec = unpack_vector(embedding_bytes)
@@ -299,10 +308,16 @@ class Database:
                 result["vector_score"] = 0.0
             results.append(result)
 
-        # Sort by vector similarity (descending), fall back to FTS rank
-        results.sort(key=lambda r: (r.get("vector_score", 0), -r.get("rank", 999999)), reverse=True)
+        # Sort by vector similarity (descending), then FTS5 rank (ascending) for tie-breaking.
+        # FTS5 rank: lower is better (0 = perfect match). Negate it so higher = better for sort.
+        # Combined score: prioritize semantic similarity, fall back to FTS5 lexical rank.
+        results.sort(
+            key=lambda r: (r.get("vector_score", 0.0), -r.get("rank", 999999)),
+            reverse=True,
+        )
 
-        return results
+        # Return only the top `limit` results after reranking
+        return results[:limit]
 
     def _sanitize_fts_query(self, query: str) -> str:
         """Sanitize user input for FTS5 query."""

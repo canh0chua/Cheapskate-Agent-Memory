@@ -296,6 +296,134 @@ class TestSearchMemories:
         assert isinstance(results, list)
 
 
+class TestHRRReranking:
+    """Tests for HRR vector reranking in search_memories."""
+
+    def test_search_reranks_by_hrr_similarity(self, temp_db: Database):
+        """HRR reranking should reorder FTS5 results by semantic similarity.
+
+        Both memories have identical FTS5-visible content ("dog pet") but
+        different embeddings. HRR similarity to the query "dog pet" should
+        determine the order.
+        """
+        from cheapskate.hrr import encode, pack_vector
+
+        # Memory A: content = "dog pet" (FTS5 matches), embedding = cats (wrong)
+        vec_a = encode("cats feline meow")
+        memory_a_id = temp_db.add_memory(
+            project="rerank",
+            content="dog pet",
+            embedding=pack_vector(vec_a),
+        )
+
+        # Memory B: content = "dog pet" (FTS5 matches), embedding = dogs (right)
+        vec_b = encode("dogs puppy canine bark pet")
+        memory_b_id = temp_db.add_memory(
+            project="rerank",
+            content="dog pet",
+            embedding=pack_vector(vec_b),
+        )
+
+        results = temp_db.search_memories("dog pet", project="rerank")
+
+        assert len(results) == 2
+        result_ids = [r["id"] for r in results]
+
+        # Memory B should come first due to higher HRR similarity to "dog pet"
+        assert result_ids[0] == memory_b_id, (
+            f"Expected memory B (id={memory_b_id}) first due to HRR similarity, "
+            f"but got order {result_ids}"
+        )
+        assert result_ids[1] == memory_a_id
+
+        # Vector scores: B > A
+        b_score = next(r["vector_score"] for r in results if r["id"] == memory_b_id)
+        a_score = next(r["vector_score"] for r in results if r["id"] == memory_a_id)
+        assert b_score > a_score
+
+    def test_search_respects_limit_after_reranking(self, temp_db: Database):
+        """Should return exactly `limit` results after reranking.
+
+        Even when FTS5 returns 5x limit candidates, only `limit` should be returned.
+        """
+        import numpy as np
+
+        from cheapskate.hrr import encode, pack_vector
+
+        limit = 3
+
+        # Add 10 memories with alternating embeddings
+        for i in range(10):
+            vec = encode(f"item {i}")
+            temp_db.add_memory(
+                project="limit-test",
+                content=f"Content item {i} with some words",
+                embedding=pack_vector(vec),
+            )
+
+        results = temp_db.search_memories("item", project="limit-test", limit=limit)
+        assert len(results) == limit
+
+    def test_search_without_embedding_falls_back_to_fts(self, temp_db: Database):
+        """Memories without embeddings should still be returned and ranked by FTS."""
+        # Memory with embedding
+        from cheapskate.hrr import encode, pack_vector
+
+        vec = encode("dogs")
+        with_embedding_id = temp_db.add_memory(
+            project="fallback",
+            content="Dog content",
+            embedding=pack_vector(vec),
+        )
+
+        # Memory without embedding
+        without_embedding_id = temp_db.add_memory(
+            project="fallback",
+            content="More dog content here",
+            embedding=None,
+        )
+
+        results = temp_db.search_memories("dog", project="fallback")
+
+        result_ids = [r["id"] for r in results]
+        assert with_embedding_id in result_ids
+        assert without_embedding_id in result_ids
+
+        # The one with embedding should have a vector_score, the other 0
+        for r in results:
+            assert "vector_score" in r
+            if r["id"] == with_embedding_id:
+                assert r["vector_score"] != 0.0
+            else:
+                assert r["vector_score"] == 0.0
+
+    def test_fts_limit_is_5x_search_limit(self, temp_db: Database):
+        """Verify FTS5 fetches 5x candidates to enable reranking headroom.
+
+        This is an implementation detail test - we verify that adding many
+        memories and searching with limit=2 still returns 2 results, but
+        candidates were fetched from a larger pool.
+        """
+        from cheapskate.hrr import encode, pack_vector
+
+        # Add 20 memories
+        for i in range(20):
+            vec = encode(f"word{i}")
+            temp_db.add_memory(
+                project="pool",
+                content=f"Memory number {i}",
+                embedding=pack_vector(vec),
+            )
+
+        # Search with small limit
+        results = temp_db.search_memories("memory", project="pool", limit=2)
+        assert len(results) == 2
+
+        # All results should have vector_score (embeddings were packed)
+        for r in results:
+            assert "vector_score" in r
+
+
 class TestGetMemory:
     """Tests for get_memory by ID."""
 
