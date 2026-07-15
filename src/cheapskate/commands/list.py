@@ -1,0 +1,115 @@
+"""
+memory list command - List memory entries.
+"""
+
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
+from cheapskate.config import Config
+from cheapskate.db import Database
+
+
+def list_memories(
+    project: Optional[str] = None,
+    limit: int = 100,
+    memory_dir: Optional[Path] = None,
+) -> int:
+    """
+    List memory entries.
+
+    Args:
+        project: Filter by project name
+        limit: Maximum number of entries to return
+        memory_dir: Path to memory directory
+
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
+    try:
+        # Load config and get database path
+        if memory_dir:
+            config_path = memory_dir / "config.yaml"
+        else:
+            config_path = None
+        config = Config(config_path)
+        db_path = config.database_path
+
+        # Check if database exists
+        if not db_path.exists():
+            print(f"Memory not initialized. Run 'memory init' first.", file=sys.stderr)
+            return 1
+
+        # Connect to database
+        db = Database(db_path)
+        db.connect()
+
+        # Get memories
+        memories = db.list_memories(project=project, limit=limit)
+
+        if not memories:
+            print("No memories found.")
+            if project:
+                print(f"(Project: {project})")
+            return 0
+
+        # Display memories
+        print(f"Found {len(memories)} memory/ies:")
+        print("-" * 60)
+
+        for mem in memories:
+            timestamp = datetime.fromisoformat(mem["timestamp"]).strftime("%Y-%m-%d %H:%M")
+            print(f"\n[{mem['id']}] {timestamp}")
+            print(f"  Project: {mem['project']}")
+            print(f"  Source: {mem['source']}")
+            content = mem["content"]
+            if len(content) > 200:
+                content = content[:200] + "..."
+            print(f"  {content}")
+
+        print("-" * 60)
+
+        # Show stats
+        stats = db.get_stats()
+        print(f"\nTotal in database: {stats['memories']} memories, {stats['topics']} topics, {stats['rules']} rules")
+
+        db.close()
+        return 0
+
+    except Exception as e:
+        print(f"Error listing memories: {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="List memory entries")
+    parser.add_argument(
+        "--project",
+        "-p",
+        default=None,
+        help="Filter by project name",
+    )
+    parser.add_argument(
+        "--limit",
+        "-n",
+        type=int,
+        default=100,
+        help="Maximum number of entries (default: 100)",
+    )
+    parser.add_argument(
+        "--path",
+        type=Path,
+        default=None,
+        help="Memory directory path (default: ~/.memory)",
+    )
+
+    args = parser.parse_args()
+
+    sys.exit(list_memories(
+        project=args.project,
+        limit=args.limit,
+        memory_dir=args.path,
+    ))
