@@ -7,7 +7,7 @@ name = "cheapskate-memory"
 version = "0.1.0"
 description = "Zero-cost, zero-dependency, fully-local memory system for coding agents"
 authors = [{name = "canh0chua", email = "canh0chua@gmail.com"}]
-readme = "README.md"
+readme = "docs/init-design.md"
 requires-python = ">=3.8"
 dependencies = [
     "numpy>=1.20.0",
