@@ -12,7 +12,11 @@ from cheapskate.config import Config
 from cheapskate.db import Database
 
 
-def memory_stats(memory_dir: Optional[Path] = None, project: Optional[str] = None) -> int:
+def memory_stats(
+    memory_dir: Optional[Path] = None,
+    project: Optional[str] = None,
+    json_output: bool = False,
+) -> int:
     try:
         if memory_dir:
             config_path = memory_dir / "config.yaml"
@@ -22,7 +26,10 @@ def memory_stats(memory_dir: Optional[Path] = None, project: Optional[str] = Non
         db_path = config.database_path
 
         if not db_path.exists():
-            print("Memory not initialized. Run 'memory init' first.", file=sys.stderr)
+            if json_output:
+                print(json.dumps({"error": "Memory not initialized"}))
+            else:
+                print("Memory not initialized. Run 'memory init' first.", file=sys.stderr)
             return 1
 
         db = Database(db_path)
@@ -41,7 +48,10 @@ def memory_stats(memory_dir: Optional[Path] = None, project: Optional[str] = Non
         rows = cursor.fetchall()
 
         if not rows:
-            print("No memories found in database.")
+            if json_output:
+                print(json.dumps({"memories": 0, "projects": {}, "sources": {}, "tags": {}, "age_distribution": {}}))
+            else:
+                print("No memories found in database.")
             db.close()
             return 0
 
@@ -64,13 +74,13 @@ def memory_stats(memory_dir: Optional[Path] = None, project: Optional[str] = Non
         quarter_cutoff = now - timedelta(days=90)
 
         for row in rows:
-            project = row["project"] or "(no project)"
-            source = row["source"] or "(no source)"
+            proj = row["project"] or "(no project)"
+            src = row["source"] or "(no source)"
             timestamp_str = row["timestamp"]
             metadata_str = row["metadata"]
 
-            project_counts[project] += 1
-            source_counts[source] += 1
+            project_counts[proj] += 1
+            source_counts[src] += 1
 
             # Parse timestamp for age buckets
             try:
@@ -86,7 +96,7 @@ def memory_stats(memory_dir: Optional[Path] = None, project: Optional[str] = Non
                 else:
                     age_buckets["Older"] += 1
             except Exception:
-                age_buckets["Older"] += 1  # fallback for bad timestamps
+                age_buckets["Older"] += 1
 
             # Parse tags from metadata
             if metadata_str:
@@ -99,17 +109,28 @@ def memory_stats(memory_dir: Optional[Path] = None, project: Optional[str] = Non
                 except Exception:
                     pass
 
+        if json_output:
+            print(json.dumps({
+                "memories": len(rows),
+                "projects": dict(project_counts),
+                "sources": dict(source_counts),
+                "tags": dict(tag_counts.most_common(20)),
+                "age_distribution": age_buckets,
+            }))
+            db.close()
+            return 0
+
         # Display results
         print("=== Cheapskate Agent Memory Statistics ===\n")
         print(f"Total memories: {len(rows)}\n")
 
         print("--- By Project ---")
-        for project, count in project_counts.most_common():
-            print(f"  {project}: {count}")
+        for proj, count in project_counts.most_common():
+            print(f"  {proj}: {count}")
 
         print("\n--- By Source ---")
-        for source, count in source_counts.most_common():
-            print(f"  {source}: {count}")
+        for src, count in source_counts.most_common():
+            print(f"  {src}: {count}")
 
         print("\n--- By Tag ---")
         if tag_counts:
@@ -126,9 +147,12 @@ def memory_stats(memory_dir: Optional[Path] = None, project: Optional[str] = Non
         return 0
 
     except Exception as e:
-        print(f"Error generating statistics: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc()
+        if json_output:
+            print(json.dumps({"error": str(e)}))
+        else:
+            print(f"Error generating statistics: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
         return 1
 
 
@@ -147,5 +171,10 @@ if __name__ == "__main__":
         default=None,
         help="Filter by project name",
     )
+    parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output as JSON",
+    )
     args = parser.parse_args()
-    sys.exit(memory_stats(memory_dir=args.path, project=args.project))
+    sys.exit(memory_stats(memory_dir=args.path, project=args.project, json_output=args.json))

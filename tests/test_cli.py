@@ -17,7 +17,7 @@ def run_memory(args, memory_dir=None, check=True, capture_output=True, text=True
     env = os.environ.copy()
     env["CHEAPSKATE_TESTING"] = "1"
     if memory_dir:
-        env["CHEAPSKATE_MEMORY_DIR"] = str(memory_dir)
+        cmd.extend(["--path", str(memory_dir)])
     
     result = subprocess.run(
         cmd,
@@ -155,45 +155,61 @@ class TestCLIAdd:
 class TestCLIList:
     """Tests for 'memory list' command."""
 
-    def test_list_empty_database(self, tmp_path):
-        """'memory list' on empty DB should show empty list."""
-        memory_dir = tmp_path / ".memory"
-        run_memory(["init", "--path", str(memory_dir)])
-        
-        result = run_memory(["list", "--path", str(memory_dir)])
-        assert result.returncode == 0
+    def setup_method(self, method):
+        # Create a temporary directory for each test
+        self.tmp_path_obj = Path(tempfile.mkdtemp())
+        self.memory_dir = self.tmp_path_obj / ".memory"
+        run_memory(["init", "--path", str(self.memory_dir), "--force"])
 
-    def test_list_with_memories(self, tmp_path):
-        """'memory list' should show memories."""
-        memory_dir = tmp_path / ".memory"
-        run_memory(["init", "--path", str(memory_dir)])
-        
-        # Add some memories
-        run_memory(["add", "Memory 1", "-p", "test"], check=False)
-        run_memory(["add", "Memory 2", "-p", "test"], check=False)
-        
-        result = run_memory(["list", "-p", "test", "--path", str(memory_dir)])
-        assert result.returncode == 0
+    def teardown_method(self, method):
+        # Clean up the temporary directory after each test
+        shutil.rmtree(self.tmp_path_obj)
 
-    def test_list_all_projects(self, tmp_path):
-        """'memory list --all-projects' should show all projects."""
-        memory_dir = tmp_path / ".memory"
-        run_memory(["init", "--path", str(memory_dir)])
+    def test_list_empty_database_json(self):
+        """'memory list --json' on empty DB should show empty JSON list."""
+        result = run_memory(["list", "--path", str(self.memory_dir), "--json"])
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["count"] == 0
+        assert data["memories"] == []
+
+    def test_list_with_memories_json(self):
+        """'memory list --json' should show memories in JSON."""
+        run_memory(["add", "Memory 1", "-p", "test", "--path", str(self.memory_dir)])
+        run_memory(["add", "Memory 2", "-p", "test", "--path", str(self.memory_dir)])
         
-        run_memory(["add", "Project A memory", "-p", "projA"])
-        run_memory(["add", "Project B memory", "-p", "projB"])
+        result = run_memory(["list", "-p", "test", "--path", str(self.memory_dir), "--json"])
+        assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["count"] == 2
+        assert len(data["memories"]) == 2
+        contents = [mem["content"] for mem in data["memories"]]
+        assert "Memory 1" in contents
+        assert "Memory 2" in contents
+
+    def test_list_all_projects_json(self):
+        """'memory list --all-projects --json' should show all projects in JSON."""
+        memory_dir = self.memory_dir
+        
+        run_memory(["add", "Project A memory", "-p", "projA", "--path", str(memory_dir)])
+        run_memory(["add", "Project B memory", "-p", "projB", "--path", str(memory_dir)])
         
         result = run_memory([
-            "list", "--all-projects", "--path", str(memory_dir)
+            "list", "--all-projects", "--path", str(memory_dir), "--json"
         ])
         assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["count"] == 2
+        assert len(data["memories"]) == 2
+        projects = [mem["project"] for mem in data["memories"]]
+        assert "projA" in projects
+        assert "projB" in projects
 
-    def test_list_with_limit(self, tmp_path):
-        """'memory list' should respect --limit option."""
+    def test_list_with_limit_json(self, tmp_path):
+        """'memory list --json' should respect --limit option and output JSON."""
         memory_dir = tmp_path / ".memory"
-        run_memory(["init", "--path", str(memory_dir)])
+        run_memory(["init", "--path", str(memory_dir), "--force"])
         
-        # Add many memories
         for i in range(10):
             run_memory([
                 "add", f"Memory {i}",
@@ -202,9 +218,12 @@ class TestCLIList:
             ])
         
         result = run_memory([
-            "list", "-p", "test", "-n", "5", "--path", str(memory_dir)
+            "list", "-p", "test", "-n", "5", "--path", str(memory_dir), "--json"
         ])
         assert result.returncode == 0
+        data = json.loads(result.stdout)
+        assert data["count"] == 5
+        assert len(data["memories"]) == 5
 
 
 class TestCLISearch:
@@ -215,8 +234,8 @@ class TestCLISearch:
         memory_dir = tmp_path / ".memory"
         run_memory(["init", "--path", str(memory_dir)])
         
-        run_memory(["add", "Python code example", "-p", "test"])
-        run_memory(["add", "JavaScript syntax", "-p", "test"])
+        run_memory(["add", "Python code example", "-p", "test", "--path", str(memory_dir)])
+        run_memory(["add", "JavaScript syntax", "-p", "test", "--path", str(memory_dir)])
         
         result = run_memory(["search", "python", "-p", "test", "--path", str(memory_dir)])
         assert result.returncode == 0
@@ -226,7 +245,7 @@ class TestCLISearch:
         memory_dir = tmp_path / ".memory"
         run_memory(["init", "--path", str(memory_dir)])
         
-        run_memory(["add", "Some content", "-p", "test"])
+        run_memory(["add", "Some content", "-p", "test", "--path", str(memory_dir)])
         
         result = run_memory(["search", "nonexistent_xyz", "-p", "test", "--path", str(memory_dir)])
         assert result.returncode == 0
@@ -257,8 +276,8 @@ class TestCLISearch:
         memory_dir = tmp_path / ".memory"
         run_memory(["init", "--path", str(memory_dir)])
         
-        run_memory(["add", "Project A specific", "-p", "projA"])
-        run_memory(["add", "Project B specific", "-p", "projB"])
+        run_memory(["add", "Project A specific", "-p", "projA", "--path", str(memory_dir)])
+        run_memory(["add", "Project B specific", "-p", "projB", "--path", str(memory_dir)])
         
         result = run_memory(["search", "specific", "-p", "projA", "--path", str(memory_dir)])
         assert result.returncode == 0
@@ -322,8 +341,8 @@ class TestCLITopics:
         run_memory(["init", "--path", str(memory_dir)])
         
         # First add some memories to link
-        run_memory(["add", "Memory 1", "-p", "test"])
-        run_memory(["add", "Memory 2", "-p", "test"])
+        run_memory(["add", "Memory 1", "-p", "test", "--path", str(memory_dir)])
+        run_memory(["add", "Memory 2", "-p", "test", "--path", str(memory_dir)])
         
         result = run_memory([
             "topic", "create", "new-topic",

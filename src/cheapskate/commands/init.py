@@ -40,6 +40,9 @@ def init_memory(memory_dir: Optional[Path] = None, force: bool = False) -> int:
             print(f"Created config: {config_path}")
 
         # Initialize database
+        db_path = memory_path / "memory.db"
+        if force and db_path.exists():
+            db_path.unlink()
         db = init_database(db_path)
         db.init_schema()
         print(f"Initialized database: {db_path}")

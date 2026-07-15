@@ -67,7 +67,8 @@ class Database:
                 metadata TEXT,
                 abstract TEXT,
                 contradicted_by INTEGER REFERENCES memories(id),
-                created DATETIME DEFAULT CURRENT_TIMESTAMP
+                created DATETIME DEFAULT CURRENT_TIMESTAMP,
+                confidence REAL DEFAULT 0.5
             )
         """)
 
@@ -127,6 +128,16 @@ class Database:
             )
         """)
 
+        # Session summaries table for session continuity
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS session_summaries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project TEXT NOT NULL,
+                date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                summary TEXT NOT NULL
+            )
+        """)
+
         # Create indexes
         conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_memories_accessed ON memories(accessed_at)")
@@ -140,6 +151,11 @@ class Database:
             conn.execute("ALTER TABLE memories ADD COLUMN abstract TEXT")
         except sqlite3.OperationalError:
             pass
+        # Migrate existing databases: add confidence column if missing
+        try:
+            conn.execute("ALTER TABLE memories ADD COLUMN confidence REAL DEFAULT 0.5")
+        except sqlite3.OperationalError:
+            pass
 
         conn.commit()
 
@@ -151,13 +167,19 @@ class Database:
         embedding: Optional[bytes] = None,
         metadata: Optional[Dict[str, Any]] = None,
         tags: Optional[List[str]] = None,
+        confidence: Optional[float] = None,
     ) -> int:
         """Add a new memory entry."""
         with self.transaction() as conn:
+            # Set confidence default based on source if not provided
+            if confidence is None:
+                confidence_map = {"user": 1.0, "agent": 0.7, "extracted": 0.5, "llm_consolidate": 0.6}
+                confidence = confidence_map.get(source, 0.5)
+
             cursor = conn.execute(
                 """
-                INSERT INTO memories (project, source, content, embedding, metadata)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO memories (project, source, content, embedding, metadata, confidence)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     project,
@@ -165,6 +187,7 @@ class Database:
                     content,
                     embedding,
                     json.dumps(metadata or {"tags": tags or []}),
+                    confidence,
                 ),
             )
             memory_id = cursor.lastrowid
@@ -253,7 +276,7 @@ class Database:
             cursor = conn.execute(
                 """
                 SELECT m.id, m.project, m.timestamp, m.source, m.content, m.abstract,
-                       m.accessed_at, m.embedding, rank
+                       m.accessed_at, m.embedding, m.confidence, rank
                 FROM memories m
                 JOIN memories_fts fts ON m.id = fts.rowid
                 WHERE memories_fts MATCH ?
@@ -267,7 +290,7 @@ class Database:
             cursor = conn.execute(
                 """
                 SELECT m.id, m.project, m.timestamp, m.source, m.content, m.abstract,
-                       m.accessed_at, m.embedding, rank
+                       m.accessed_at, m.embedding, m.confidence, rank
                 FROM memories m
                 JOIN memories_fts fts ON m.id = fts.rowid
                 WHERE memories_fts MATCH ?
@@ -308,13 +331,15 @@ class Database:
                 result["vector_score"] = 0.0
             results.append(result)
 
-        # Sort by vector similarity (descending), then FTS5 rank (ascending) for tie-breaking.
-        # FTS5 rank: lower is better (0 = perfect match). Negate it so higher = better for sort.
         # Combined score: prioritize semantic similarity, fall back to FTS5 lexical rank.
-        results.sort(
-            key=lambda r: (r.get("vector_score", 0.0), -r.get("rank", 999999)),
-            reverse=True,
-        )
+        # combined score = (confidence * 0.3) + (hrr_similarity * 0.7)
+        for result in results:
+            confidence = result.get("confidence", 0.5)  # Default confidence if not present
+            hrr_similarity = result.get("vector_score", 0.0)
+            combined_score = (confidence * 0.3) + (hrr_similarity * 0.7)
+            result["score"] = combined_score
+
+        results.sort(key=lambda r: r.get("score", 0.0), reverse=True)
 
         # Return only the top `limit` results after reranking
         return results[:limit]
@@ -652,6 +677,34 @@ class Database:
         row = cursor.fetchone()
         return row["value"] if row else default
 
+    def set_session_summary(self, project: str, summary: str) -> None:
+        """Store a session summary for project continuity."""
+        with self.transaction() as conn:
+            conn.execute(
+                """
+                INSERT INTO session_summaries (project, summary, date)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                """,
+                (project, summary),
+            )
+
+    def get_last_session(self, project: str) -> Optional[Dict[str, Any]]:
+        """Get the most recent session summary for a project."""
+        conn = self.connect()
+        cursor = conn.execute(
+            """
+            SELECT id, project, date, summary
+            FROM session_summaries
+            WHERE project = ?
+            ORDER BY date DESC
+            LIMIT 1
+            """,
+            (project,),
+        )
+        row = cursor.fetchone()
+        if row:
+            return dict(row)
+        return None
 
     def __enter__(self):
         self.connect()

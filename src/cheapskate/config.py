@@ -32,11 +32,19 @@ capture:
 consolidate:
   schedule: "0 2 * * *"
   trigger_threshold: 100
+  backend: "claude"
+  ollama_url: "http://localhost:11434"
+  ollama_model: "llama3"
 forgetting:
   decay_days: 90
   max_age_days: 365
   include_contradicted: false
   soft_delete: true
+hooks:
+  on_session_start: []
+  on_error: []
+  on_file_edit: []
+  on_session_end: []
 """.strip()
 
 

@@ -2,6 +2,7 @@
 memory list command - List memory entries.
 """
 
+import json
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +17,7 @@ def list_memories(
     all_projects: bool = False,
     limit: int = 100,
     memory_dir: Optional[Path] = None,
+    json_output: bool = False,
 ) -> int:
     """
     List memory entries.
@@ -24,6 +26,7 @@ def list_memories(
         project: Filter by project name
         limit: Maximum number of entries to return
         memory_dir: Path to memory directory
+        json_output: Output results as JSON
 
     Returns:
         Exit code (0 for success, 1 for error)
@@ -53,34 +56,64 @@ def list_memories(
         memories = db.list_memories(project=filter_project, limit=limit)
 
         if not memories:
-            print("No memories found.")
-            if project:
-                print(f"(Project: {project})")
+            if json_output:
+                output = {
+                    "memories": [],
+                    "count": 0,
+                    "project": project if not all_projects else None,
+                    "all_projects": all_projects,
+                }
+                print(json.dumps(output, indent=2))
+            else:
+                print("No memories found.")
+                if project:
+                    print(f"(Project: {project})")
             return 0
 
-        # Display memories
-        print(f"Found {len(memories)} memory/ies:")
-        print("-" * 60)
+        if json_output:
+            # Output as JSON
+            output = {
+                "memories": [
+                    {
+                        "id": mem["id"],
+                        "project": mem["project"],
+                        "timestamp": mem["timestamp"],
+                        "source": mem["source"],
+                        "content": mem["content"],
+                        "abstract": mem.get("abstract"),
+                        "accessed_at": mem.get("accessed_at"),
+                    }
+                    for mem in memories
+                ],
+                "count": len(memories),
+                "project": project if not all_projects else None,
+                "all_projects": all_projects,
+            }
+            print(json.dumps(output, indent=2))
+        else:
+            # Display memories
+            print(f"Found {len(memories)} memory/ies:")
+            print("-" * 60)
 
-        for mem in memories:
-            timestamp = datetime.fromisoformat(mem["timestamp"]).strftime("%Y-%m-%d %H:%M")
-            print(f"\n[{mem['id']}] {timestamp}")
-            if all_projects or project is None:
-                print(f"  Project: {mem['project']}")
-            print(f"  Source: {mem['source']}")
-            content = mem["content"]
-            if len(content) > 200:
-                content = content[:200] + "..."
-            print(f"  Content: {content}")
-            abstract = mem.get("abstract")
-            if abstract:
-                print(f"  Abstract: {abstract}")
+            for mem in memories:
+                timestamp = datetime.fromisoformat(mem["timestamp"]).strftime("%Y-%m-%d %H:%M")
+                print(f"\n[{mem['id']}] {timestamp}")
+                if all_projects or project is None:
+                    print(f"  Project: {mem['project']}")
+                print(f"  Source: {mem['source']}")
+                content = mem["content"]
+                if len(content) > 200:
+                    content = content[:200] + "..."
+                print(f"  Content: {content}")
+                abstract = mem.get("abstract")
+                if abstract:
+                    print(f"  Abstract: {abstract}")
 
-        print("-" * 60)
+            print("-" * 60)
 
-        # Show stats
-        stats = db.get_stats()
-        print(f"\nTotal in database: {stats['memories']} memories, {stats['topics']} topics, {stats['rules']} rules")
+            # Show stats
+            stats = db.get_stats()
+            print(f"\nTotal in database: {stats['memories']} memories, {stats['topics']} topics, {stats['rules']} rules")
 
         db.close()
         return 0

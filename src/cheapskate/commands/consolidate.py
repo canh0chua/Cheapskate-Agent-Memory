@@ -1,5 +1,5 @@
 """
-memory consolidate command - Dreams-style consolidation via Claude Code CLI.
+memory consolidate command - Dreams-style consolidation via Claude Code CLI, Ollama, or offline fallback.
 """
 
 import json
@@ -9,6 +9,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+import requests
 
 from cheapskate.config import Config, default_memory_dir
 from cheapskate.db import Database
@@ -37,6 +39,39 @@ def _build_prompt(rows) -> str:
         content = row.get("content", "")
         lines.append(f"- [{ts}] ({source}) {content}")
     return DREAMS_PROMPT.format(memories="\n".join(lines) if lines else "(no new memories)")
+
+
+def run_ollama(prompt: str, model: str = "llama3", url: str = "http://localhost:11434") -> str:
+    """Run Ollama model and return generated text."""
+    response = requests.post(
+        f"{url.rstrip('/')}/api/generate",
+        json={"model": model, "prompt": prompt, "stream": False},
+        timeout=60,
+    )
+    response.raise_for_status()
+    data = response.json()
+    return data.get("response", "")
+
+
+def offline_summarize(memories) -> str:
+    """Template-based offline summarization grouped by project."""
+    from collections import defaultdict
+
+    groups = defaultdict(list)
+    for row in memories:
+        project = row.get("project", "default")
+        content = row.get("content", "").strip()
+        groups[project].append(content)
+
+    lines = ["Offline consolidation summary", ""]
+    for project, items in groups.items():
+        lines.append(f"Project: {project}")
+        lines.append(f"- {len(items)} new memories")
+        for item in items[:20]:
+            lines.append(f"  - {item}")
+        lines.append("")
+
+    return "\n".join(lines)
 
 
 def consolidate_memories(
@@ -73,38 +108,80 @@ def consolidate_memories(
             new_memories = [dict(row) for row in cursor.fetchall()]
 
         prompt = _build_prompt(new_memories)
+        backend = config.get("consolidate.backend", "claude")
+        output = ""
+        project_to_use = project
 
-        claude_path = shutil.which("claude")
-        if not claude_path:
-            print("Claude Code CLI not found.", file=sys.stderr)
-            print("Install it or ensure `claude` is on PATH, then re-run.", file=sys.stderr)
+        if backend == "claude":
+            claude_path = shutil.which("claude")
+            if not claude_path:
+                print("Claude Code CLI not found.", file=sys.stderr)
+                print("Install it or ensure `claude` is on PATH, then re-run.", file=sys.stderr)
+                db.close()
+                return 1
+
+            print("Running Claude Code consolidation...")
+            try:
+                proc = subprocess.run(
+                    [claude_path, "-p", prompt],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+            except subprocess.TimeoutExpired:
+                print("Claude Code consolidation timed out after 30 seconds.", file=sys.stderr)
+                db.close()
+                return 1
+            except Exception as e:
+                print(f"Failed to run Claude Code: {e}", file=sys.stderr)
+                db.close()
+                return 1
+
+            if proc.returncode != 0:
+                print(f"Claude Code failed: {proc.stderr.strip()}", file=sys.stderr)
+                db.close()
+                return 1
+
+            output = proc.stdout
+
+        elif backend == "ollama":
+            ollama_url = config.get("consolidate.ollama_url", "http://localhost:11434")
+            ollama_model = config.get("consolidate.ollama_model", "llama3")
+            print(f"Running Ollama consolidation with {ollama_model}...")
+            try:
+                output = run_ollama(prompt, model=ollama_model, url=ollama_url)
+            except Exception as e:
+                print(f"Ollama failed: {e}", file=sys.stderr)
+                print("Falling back to offline summarization...", file=sys.stderr)
+                output = offline_summarize(new_memories)
+
+        elif backend == "offline":
+            print("Running offline consolidation...")
+            output = offline_summarize(new_memories)
+
+        else:
+            print(f"Unknown consolidate backend: {backend}", file=sys.stderr)
             db.close()
             return 1
 
-        print("Running Claude Code consolidation...")
-        try:
-            proc = subprocess.run(
-                [claude_path, "-p", prompt],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-        except subprocess.TimeoutExpired:
-            print("Claude Code consolidation timed out after 30 seconds.", file=sys.stderr)
-            db.close()
-            return 1
-        except Exception as e:
-            print(f"Failed to run Claude Code: {e}", file=sys.stderr)
-            db.close()
-            return 1
-
-        if proc.returncode != 0:
-            print(f"Claude Code failed: {proc.stderr.strip()}", file=sys.stderr)
-            db.close()
-            return 1
+        # Store session summary for continuity
+        if new_memories:
+            topics_set = set()
+            for mem in new_memories:
+                content = mem.get("content", "")
+                if ":" in content:
+                    topic = content.split(":", 1)[0].strip()
+                    if len(topic) < 50:
+                        topics_set.add(topic)
+            summary = f"Consolidated {len(new_memories)} memories."
+            if topics_set:
+                summary += f" Topics: {', '.join(sorted(topics_set)[:5])}"
+            try:
+                db.set_session_summary(project_to_use, summary)
+            except Exception as e:
+                print(f"Warning:Failed to store session summary: {e}", file=sys.stderr)
 
         # Limit output size to prevent memory issues
-        output = proc.stdout
         if len(output) > 100_000:
             output = output[:100_000] + "\n[OUTPUT TRUNCATED]"
         print(output)

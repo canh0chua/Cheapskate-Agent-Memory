@@ -10,7 +10,9 @@ __email__ = "canh0chua@gmail.com"
 
 from cheapskate.config import Config, load_config, validate_memory_path
 from cheapskate.db import Database, get_database, init_database
+from cheapskate.hooks import run_hooks
 from cheapskate.hrr import encode, similarity
+from cheapskate.client import MemoryClient
 
 __all__ = [
     "Config",
@@ -25,4 +27,6 @@ __all__ = [
     "MAX_PROJECT_LENGTH",
     "MAX_TAG_LENGTH",
     "MAX_TAGS_PER_MEMORY",
+    "MemoryClient",
+    "run_hooks",
 ]

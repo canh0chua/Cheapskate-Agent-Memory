@@ -16,8 +16,10 @@ from cheapskate.commands.init import init_memory
 from cheapskate.commands.list import list_memories
 from cheapskate.commands.prune import prune_memories
 from cheapskate.commands.search import search_memories
+from cheapskate.commands.suggest import suggest_memories
 from cheapskate.commands.topicify import topicify_memories
 from cheapskate.commands.topics import manage_topics
+from cheapskate.commands.verify import verify_memories
 from cheapskate.memory_md import generate_memory_md
 
 
@@ -59,6 +61,29 @@ Examples:
         "--force",
         action="store_true",
         help="Force reinitialization",
+    )
+
+    # Suggest command
+    suggest_parser = subparsers.add_parser("suggest", help="Suggest relevant memories from current project")
+    suggest_parser.add_argument(
+        "--project", "-p", default=None,
+        help="Project name (auto-detected if not provided)",
+    )
+    suggest_parser.add_argument(
+        "--limit", "-n", type=int, default=5,
+        help="Maximum suggestions (default: 5)",
+    )
+    suggest_parser.add_argument(
+        "--path", type=Path, default=None,
+        help="Memory directory path (default: ~/.memory)",
+    )
+    suggest_parser.add_argument(
+        "--json", "-j", action="store_true",
+        help="Output as JSON",
+    )
+    suggest_parser.add_argument(
+        "--no-auto-detect", action="store_true",
+        help="Disable auto-detection from current directory",
     )
 
     # Add command
@@ -114,6 +139,12 @@ Examples:
         type=Path,
         default=None,
         help="Memory directory path (default: ~/.memory)",
+    )
+    list_parser.add_argument(
+        "--json",
+        "-j",
+        action="store_true",
+        help="Output as JSON",
     )
 
     # Search command
@@ -332,6 +363,27 @@ Examples:
         help="Memory directory path (default: ~/.memory)",
     )
 
+    # Verify command
+    verify_parser = subparsers.add_parser("verify", help="Verify stored memories")
+    verify_parser.add_argument(
+        "--project",
+        "-p",
+        default="default",
+        help="Project name (default: default)",
+    )
+    verify_parser.add_argument(
+        "--path",
+        type=Path,
+        default=None,
+        help="Memory directory path (default: ~/.memory)",
+    )
+    verify_parser.add_argument(
+        "--json",
+        "-j",
+        action="store_true",
+        help="Output as JSON",
+    )
+
     # Status command
     status_parser = subparsers.add_parser("status", help="Show memory status and config summary")
     status_parser.add_argument(
@@ -339,6 +391,12 @@ Examples:
         type=Path,
         default=None,
         help="Memory directory path (default: ~/.memory)",
+    )
+    status_parser.add_argument(
+        "--json",
+        "-j",
+        action="store_true",
+        help="Output as JSON",
     )
 
     # Stats command
@@ -354,6 +412,11 @@ Examples:
         type=Path,
         default=None,
         help="Memory directory path (default: ~/.memory)",
+    )
+    stats_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output as JSON",
     )
 
     args = parser.parse_args()
@@ -385,6 +448,7 @@ Examples:
                 all_projects=args.all_projects,
                 limit=args.limit,
                 memory_dir=args.path,
+                json_output=args.json,
             )
 
         elif args.command == "search":
@@ -395,6 +459,15 @@ Examples:
                 limit=args.limit,
                 json_output=args.json,
                 memory_dir=args.path,
+            )
+
+        elif args.command == "suggest":
+            return suggest_memories(
+                project=args.project,
+                memory_dir=args.path,
+                limit=args.limit,
+                auto_detect=not args.no_auto_detect,
+                json_output=args.json,
             )
 
         elif args.command == "topicify":
@@ -463,6 +536,14 @@ Examples:
                 memory_dir=args.path,
             )
 
+        elif args.command == "verify":
+            project = args.project or "default"
+            return verify_memories(
+                project=project,
+                memory_dir=args.path,
+                json_output=args.json,
+            )
+
         elif args.command == "memory-md":
             project = args.project or "default"
             return generate_memory_md(
@@ -473,11 +554,11 @@ Examples:
 
         elif args.command == "status":
             from cheapskate.commands.status import memory_status
-            return memory_status(memory_dir=args.path)
+            return memory_status(memory_dir=args.path, json_output=args.json)
 
         elif args.command == "stats":
             from cheapskate.commands.stats import memory_stats
-            return memory_stats(memory_dir=args.path, project=args.project)
+            return memory_stats(memory_dir=args.path, project=args.project, json_output=args.json)
 
         else:
             parser.print_help()

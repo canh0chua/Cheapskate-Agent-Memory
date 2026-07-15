@@ -281,6 +281,12 @@ consolidate:
 
 ---
 
+## SKILL Templates
+
+For programmatic skill loading, see [skill-template.md](./skill-template.md). It contains a machine-readable YAML definition that agents can parse to generate exact CLI commands, understand decision trees, and auto-detect trigger conditions.
+
+---
+
 ## Integration Status
 
 CAM currently works as a **CLI-orchestrated tool**. Agents invoke it via `subprocess`. The roadmap (see `docs/agent-review-3.md`) plans to add a Python API for direct import.

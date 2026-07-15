@@ -149,20 +149,47 @@ def generate_quick_reference_section(memories: List[Dict]) -> str:
     return "\n".join(lines)
 
 
+def generate_last_session_section(last_session: Optional[Dict]) -> str:
+    """Generate the Last Session section for MEMORY.md."""
+    if not last_session:
+        return "## Last Session\n\n_No previous session recorded._"
+
+    date = last_session.get("date", "")
+    summary = last_session.get("summary", "")
+    if hasattr(date, "strftime"):
+        date = date.strftime("%Y-%m-%d")
+    elif isinstance(date, str) and len(date) >= 10:
+        date = date[:10]
+
+    lines = [
+        f"## Last Session ({date})",
+        "",
+        summary,
+        "",
+        "---",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def generate_memory_md_content(
     project: str,
     topics: List[Dict],
     memories: List[Dict],
+    last_session: Optional[Dict] = None,
 ) -> str:
     """Generate the complete MEMORY.md content."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     header = f"# Memory Index — {project}\n\n_Last updated: {now}_"
+    last_session_section = generate_last_session_section(last_session)
     topics_section = generate_topics_section(topics)
     recent_section = generate_recent_facts_section(memories)
     quick_ref_section = generate_quick_reference_section(memories)
 
     content = f"""{header}
+
+{last_session_section}
 
 {topics_section}
 
@@ -262,9 +289,10 @@ def generate_memory_md(
         # Get topics and memories
         topics = db.get_topics(project=project)
         memories = db.list_memories(project=project, limit=MAX_RECENT_FACTS)
+        last_session = db.get_last_session(project=project)
 
         # Generate content
-        content = generate_memory_md_content(project, topics, memories)
+        content = generate_memory_md_content(project, topics, memories, last_session=last_session)
 
         # Apply size limit
         original_size = len(content.encode("utf-8"))
