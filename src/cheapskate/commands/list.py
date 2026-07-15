@@ -13,6 +13,7 @@ from cheapskate.db import Database
 
 def list_memories(
     project: Optional[str] = None,
+    all_projects: bool = False,
     limit: int = 100,
     memory_dir: Optional[Path] = None,
 ) -> int:
@@ -45,8 +46,11 @@ def list_memories(
         db = Database(db_path)
         db.connect()
 
+        # Determine project filter: --all-projects overrides --project
+        filter_project = None if all_projects else project
+
         # Get memories
-        memories = db.list_memories(project=project, limit=limit)
+        memories = db.list_memories(project=filter_project, limit=limit)
 
         if not memories:
             print("No memories found.")
@@ -61,12 +65,16 @@ def list_memories(
         for mem in memories:
             timestamp = datetime.fromisoformat(mem["timestamp"]).strftime("%Y-%m-%d %H:%M")
             print(f"\n[{mem['id']}] {timestamp}")
-            print(f"  Project: {mem['project']}")
+            if all_projects or project is None:
+                print(f"  Project: {mem['project']}")
             print(f"  Source: {mem['source']}")
             content = mem["content"]
             if len(content) > 200:
                 content = content[:200] + "..."
-            print(f"  {content}")
+            print(f"  Content: {content}")
+            abstract = mem.get("abstract")
+            if abstract:
+                print(f"  Abstract: {abstract}")
 
         print("-" * 60)
 

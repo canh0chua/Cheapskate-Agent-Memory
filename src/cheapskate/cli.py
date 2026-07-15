@@ -98,6 +98,11 @@ Examples:
         help="Filter by project name",
     )
     list_parser.add_argument(
+        "--all-projects",
+        action="store_true",
+        help="List memories from all projects (overrides --project)",
+    )
+    list_parser.add_argument(
         "--limit",
         "-n",
         type=int,
@@ -119,6 +124,11 @@ Examples:
         "-p",
         default=None,
         help="Filter by project name",
+    )
+    search_parser.add_argument(
+        "--all-projects",
+        action="store_true",
+        help="Search across all projects (overrides --project)",
     )
     search_parser.add_argument(
         "--limit",
@@ -348,6 +358,7 @@ Examples:
         elif args.command == "list":
             return list_memories(
                 project=args.project,
+                all_projects=args.all_projects,
                 limit=args.limit,
                 memory_dir=args.path,
             )
@@ -356,6 +367,7 @@ Examples:
             return search_memories(
                 query=args.query,
                 project=args.project,
+                all_projects=args.all_projects,
                 limit=args.limit,
                 json_output=args.json,
                 memory_dir=args.path,

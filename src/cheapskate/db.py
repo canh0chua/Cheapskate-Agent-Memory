@@ -64,6 +64,7 @@ class Database:
                 content TEXT NOT NULL,
                 embedding BLOB,
                 metadata TEXT,
+                abstract TEXT,
                 contradicted_by INTEGER REFERENCES memories(id),
                 created DATETIME DEFAULT CURRENT_TIMESTAMP
             )
@@ -133,6 +134,12 @@ class Database:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_rules_project_scope ON rules(project, scope)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_memory ON audit(memory_id)")
 
+        # Migrate existing databases: add abstract column if missing
+        try:
+            conn.execute("ALTER TABLE memories ADD COLUMN abstract TEXT")
+        except sqlite3.OperationalError:
+            pass
+
         conn.commit()
 
     def add_memory(
@@ -186,7 +193,7 @@ class Database:
         if project:
             cursor = conn.execute(
                 """
-                SELECT id, project, timestamp, source, content, accessed_at
+                SELECT id, project, timestamp, source, content, abstract, accessed_at
                 FROM memories
                 WHERE project = ?
                 ORDER BY timestamp DESC
@@ -197,7 +204,7 @@ class Database:
         else:
             cursor = conn.execute(
                 """
-                SELECT id, project, timestamp, source, content, accessed_at
+                SELECT id, project, timestamp, source, content, abstract, accessed_at
                 FROM memories
                 ORDER BY timestamp DESC
                 LIMIT ? OFFSET ?
@@ -223,7 +230,7 @@ class Database:
         if project:
             cursor = conn.execute(
                 """
-                SELECT m.id, m.project, m.timestamp, m.source, m.content, m.accessed_at,
+                SELECT m.id, m.project, m.timestamp, m.source, m.content, m.abstract, m.accessed_at,
                        rank
                 FROM memories m
                 JOIN memories_fts fts ON m.id = fts.rowid
@@ -237,7 +244,7 @@ class Database:
         else:
             cursor = conn.execute(
                 """
-                SELECT m.id, m.project, m.timestamp, m.source, m.content, m.accessed_at,
+                SELECT m.id, m.project, m.timestamp, m.source, m.content, m.abstract, m.accessed_at,
                        rank
                 FROM memories m
                 JOIN memories_fts fts ON m.id = fts.rowid
@@ -408,35 +415,44 @@ class Database:
             cutoff = (now - timedelta(days=decay_days)).isoformat()
             if project:
                 cursor = conn.execute(
-                    "SELECT id FROM memories WHERE project = ? AND accessed_at < ?",
+                    "SELECT id, content FROM memories WHERE project = ? AND accessed_at < ?",
                     (project, cutoff),
                 )
             else:
                 cursor = conn.execute(
-                    "SELECT id FROM memories WHERE accessed_at < ?",
+                    "SELECT id, content FROM memories WHERE accessed_at < ?",
                     (cutoff,),
                 )
-            decay_ids = [row["id"] for row in cursor.fetchall()]
+            decay_rows = cursor.fetchall()
+            decay_ids = [row["id"] for row in decay_rows]
             pruned.extend(decay_ids)
+            # Store content for potential abstract generation
+            decay_contents = [(row["id"], row["content"]) for row in decay_rows]
+        else:
+            decay_contents = []
 
         # Max age pruning: timestamp older than max_age_days
         if max_age_days > 0:
             cutoff = (now - timedelta(days=max_age_days)).isoformat()
             if project:
                 cursor = conn.execute(
-                    "SELECT id FROM memories WHERE project = ? AND timestamp < ?",
-                    (project, cutoff),
+                    "SELECT id, content FROM memories WHERE project = ? AND timestamp < ? AND id NOT IN (SELECT id FROM memories WHERE accessed_at >= ?)",
+                    (project, cutoff, cutoff),
                 )
             else:
                 cursor = conn.execute(
-                    "SELECT id FROM memories WHERE timestamp < ?",
-                    (cutoff,),
+                    "SELECT id, content FROM memories WHERE timestamp < ? AND id NOT IN (SELECT id FROM memories WHERE accessed_at >= ?)",
+                    (cutoff, cutoff),
                 )
-            age_ids = [row["id"] for row in cursor.fetchall()]
+            age_rows = cursor.fetchall()
+            age_ids = [row["id"] for row in age_rows]
             # Union while preserving order
             for aid in age_ids:
                 if aid not in pruned:
                     pruned.append(aid)
+            age_contents = [(row["id"], row["content"]) for row in age_rows]
+        else:
+            age_contents = []
 
         if dry_run:
             return {
@@ -445,11 +461,29 @@ class Database:
                 "memory_ids": pruned,
             }
 
+        # Combine all contents for abstract generation
+        all_contents = decay_contents + age_contents
+        # Sort by memory ID to avoid duplicates (age might overlap with decay)
+        seen = set()
+        unique_contents = []
+        for mid, content in all_contents:
+            if mid not in seen:
+                seen.add(mid)
+                unique_contents.append((mid, content))
+
+        # Generate and store abstracts before deletion
+        for memory_id, content in unique_contents:
+            abstract = self._generate_abstract(content)
+            conn.execute(
+                "UPDATE memories SET abstract = ? WHERE id = ?",
+                (abstract, memory_id),
+            )
+
         # Perform deletion / soft-delete
         deleted_count = 0
         for memory_id in pruned:
             if soft_delete:
-                # Remove from FTS to hide from queries, but keep row
+                # Remove from FTS to hide from queries, but keep row (with abstract preserved)
                 conn.execute("DELETE FROM memories_fts WHERE rowid = ?", (memory_id,))
                 conn.execute(
                     "UPDATE memories SET content = '[pruned]' WHERE id = ?",
@@ -469,6 +503,26 @@ class Database:
             "pruned_count": deleted_count,
             "memory_ids": pruned,
         }
+
+    def _generate_abstract(self, content: str, max_length: int = 200) -> str:
+        """Generate a compressed abstract/summary of memory content.
+
+        Simple implementation: truncate to first sentence or max_length.
+        Could be enhanced with extractive summarization or LLM.
+        """
+        if not content:
+            return ""
+        # Simple: take first 200 chars, try to end at sentence boundary
+        if len(content) <= max_length:
+            return content
+        # Find last sentence boundary within max_length
+        truncated = content[:max_length]
+        # Look for sentence end (. ! ?) or ellipsis
+        for sep in ['. ', '! ', '? ']:
+            pos = truncated.rfind(sep)
+            if pos > max_length * 0.5:  # At least halfway
+                return truncated[:pos+1].strip()
+        return truncated.strip() + "..."
 
     def get_audit_trail(
         self,

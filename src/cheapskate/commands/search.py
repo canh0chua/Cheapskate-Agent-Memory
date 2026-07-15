@@ -15,6 +15,7 @@ from cheapskate.db import Database
 def search_memories(
     query: str,
     project: Optional[str] = None,
+    all_projects: bool = False,
     limit: int = 20,
     json_output: bool = False,
     memory_dir: Optional[Path] = None,
@@ -55,7 +56,9 @@ def search_memories(
         db.connect()
 
         # Search memories
-        results = db.search_memories(query=query, project=project, limit=limit)
+        # Determine project filter: --all-projects overrides --project
+        filter_project = None if all_projects else project
+        results = db.search_memories(query=query, project=filter_project, limit=limit)
 
         if not results:
             print("No results found.")
@@ -93,6 +96,9 @@ def search_memories(
                 print(f"  Project: {r['project']}")
                 print(f"  Source: {r['source']}")
                 print(f"  {r['content']}")
+                abstract = r.get("abstract")
+                if abstract:
+                    print(f"  Abstract: {abstract}")
 
             print("-" * 60)
 
