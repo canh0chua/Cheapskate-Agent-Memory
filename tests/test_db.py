@@ -1,7 +1,7 @@
 """Tests for database layer (db.py)."""
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -633,7 +633,7 @@ class TestPruneMemories:
     def test_prune_dry_run_returns_ids(self, temp_db: Database):
         """prune_memories dry_run should return memory IDs to prune."""
         # Add memories with old accessed_at timestamps
-        old_date = (datetime.utcnow() - timedelta(days=100)).isoformat()
+        old_date = (datetime.now(timezone.utc) - timedelta(days=100)).isoformat()
         with temp_db.transaction() as conn:
             conn.execute(
                 "INSERT INTO memories (project, source, content, accessed_at) VALUES (?, ?, ?, ?)",
@@ -647,7 +647,7 @@ class TestPruneMemories:
 
     def test_prune_soft_delete(self, temp_db: Database):
         """prune_memories with soft_delete should mark memories but not delete rows."""
-        old_date = (datetime.utcnow() - timedelta(days=100)).isoformat()
+        old_date = (datetime.now(timezone.utc) - timedelta(days=100)).isoformat()
         with temp_db.transaction() as conn:
             conn.execute(
                 "INSERT INTO memories (project, source, content, accessed_at) VALUES (?, ?, ?, ?)",
@@ -670,7 +670,7 @@ class TestPruneMemories:
 
     def test_prune_hard_delete(self, temp_db: Database):
         """prune_memories with soft_delete=False should delete rows."""
-        old_date = (datetime.utcnow() - timedelta(days=100)).isoformat()
+        old_date = (datetime.now(timezone.utc) - timedelta(days=100)).isoformat()
         with temp_db.transaction() as conn:
             conn.execute(
                 "INSERT INTO memories (project, source, content, accessed_at) VALUES (?, ?, ?, ?)",
@@ -684,7 +684,7 @@ class TestPruneMemories:
 
     def test_prune_generates_abstract(self, temp_db: Database):
         """prune_memories should generate abstracts before deletion."""
-        old_date = (datetime.utcnow() - timedelta(days=100)).isoformat()
+        old_date = (datetime.now(timezone.utc) - timedelta(days=100)).isoformat()
         content = "This is a long content that should be summarized. " * 20
         with temp_db.transaction() as conn:
             conn.execute(
@@ -702,7 +702,7 @@ class TestPruneMemories:
 
     def test_prune_audit_log(self, temp_db: Database):
         """prune_memories should create audit entries."""
-        old_date = (datetime.utcnow() - timedelta(days=100)).isoformat()
+        old_date = (datetime.now(timezone.utc) - timedelta(days=100)).isoformat()
         with temp_db.transaction() as conn:
             conn.execute(
                 "INSERT INTO memories (project, source, content, accessed_at) VALUES (?, ?, ?, ?)",

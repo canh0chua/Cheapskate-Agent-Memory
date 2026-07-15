@@ -2,7 +2,7 @@
 memory status command - Show DB stats, last consolidate/prune times, config summary.
 """
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -45,7 +45,7 @@ def memory_status(memory_dir: Optional[Path] = None) -> int:
         if last_consolidate:
             try:
                 ts = datetime.fromisoformat(last_consolidate)
-                ago = datetime.utcnow() - ts.replace(tzinfo=None)
+                ago = datetime.now(timezone.utc) - ts.replace(tzinfo=None)
                 print(f"Last consolidate: {ts.strftime('%Y-%m-%d %H:%M:%S')} ({_format_timedelta(ago)})")
             except Exception:
                 print(f"Last consolidate: {last_consolidate}")
@@ -57,7 +57,7 @@ def memory_status(memory_dir: Optional[Path] = None) -> int:
         if last_prune:
             try:
                 ts = datetime.fromisoformat(last_prune)
-                ago = datetime.utcnow() - ts.replace(tzinfo=None)
+                ago = datetime.now(timezone.utc) - ts.replace(tzinfo=None)
                 print(f"Last prune: {ts.strftime('%Y-%m-%d %H:%M:%S')} ({_format_timedelta(ago)})")
             except Exception:
                 print(f"Last prune: {last_prune}")

@@ -7,7 +7,7 @@ Manages SQLite database with FTS5 full-text search support.
 import json
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -283,7 +283,7 @@ class Database:
             return []
 
         # Batch update accessed_at in a single query
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         row_ids = [row["id"] for row in rows]
         placeholders = ",".join(["?" for _ in row_ids])
         conn.execute(
@@ -461,7 +461,7 @@ class Database:
         Returns a summary dict with counts and affected memory IDs.
         """
         conn = self.connect()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         pruned: List[int] = []
 
         # Decay pruning: accessed_at older than decay_days
@@ -534,23 +534,31 @@ class Database:
             )
 
         # Perform deletion / soft-delete
+        # Note: memories_fts is an external-content FTS5 table (content=memories),
+        # so it auto-syncs when rows in memories are deleted/updated. Explicitly
+        # deleting from the FTS table corrupts the index ("database disk image is
+        # malformed"), so we must NOT touch memories_fts here.
         deleted_count = 0
-        for memory_id in pruned:
-            if soft_delete:
-                # Remove from FTS to hide from queries, but keep row (with abstract preserved)
-                conn.execute("DELETE FROM memories_fts WHERE rowid = ?", (memory_id,))
+        try:
+            for memory_id in pruned:
+                if soft_delete:
+                    # Keep the row (with abstract preserved) but clear its content
+                    # so it no longer matches searches. The FTS table auto-updates.
+                    conn.execute(
+                        "UPDATE memories SET content = '[pruned]' WHERE id = ?",
+                        (memory_id,),
+                    )
+                else:
+                    conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
                 conn.execute(
-                    "UPDATE memories SET content = '[pruned]' WHERE id = ?",
-                    (memory_id,),
+                    "INSERT INTO audit (memory_id, action, reason, agent_id) VALUES (?, 'prune', 'decay/max_age', ?)",
+                    (memory_id, agent_id),
                 )
-            else:
-                conn.execute("DELETE FROM memories_fts WHERE rowid = ?", (memory_id,))
-                conn.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
-            conn.execute(
-                "INSERT INTO audit (memory_id, action, reason, agent_id) VALUES (?, 'prune', 'decay/max_age', ?)",
-                (memory_id, agent_id),
-            )
-            deleted_count += 1
+                deleted_count += 1
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
 
         return {
             "dry_run": False,

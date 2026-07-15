@@ -237,16 +237,18 @@ class TestCLISearch:
         run_memory(["init", "--path", str(memory_dir)])
 
         run_memory(["add", "Searchable content", "-p", "test", "--path", str(memory_dir)])
-        
+
         result = run_memory([
             "search", "searchable", "-p", "test",
             "--json", "--path", str(memory_dir)
         ])
         assert result.returncode == 0
-        # Should be valid JSON
+        # Should be valid JSON object with results array
         try:
             data = json.loads(result.stdout)
-            assert isinstance(data, list)
+            assert isinstance(data, dict)
+            assert "results" in data
+            assert isinstance(data["results"], list)
         except json.JSONDecodeError:
             pytest.fail("Output is not valid JSON")
 
@@ -336,11 +338,15 @@ class TestCLITopics:
         """'memory topic delete' should delete a topic."""
         memory_dir = tmp_path / ".memory"
         run_memory(["init", "--path", str(memory_dir)])
-        
+
         # Create a topic first
-        run_memory(["add", "Memory", "-p", "test"])
-        run_memory(["topic", "create", "to-delete", "-p", "test", "-m", "1"])
-        
+        run_memory(["add", "Memory", "-p", "test", "--path", str(memory_dir)])
+        run_memory([
+            "topic", "create", "to-delete",
+            "-p", "test", "-m", "1",
+            "--path", str(memory_dir),
+        ])
+
         result = run_memory([
             "topic", "delete", "to-delete",
             "-p", "test",
@@ -449,15 +455,16 @@ class TestCLIMemoryMd:
     """Tests for 'memory memory-md' command."""
 
     def test_memory_md_generates_file(self, tmp_path):
-        """'memory memory-md' should generate MEMORY.md file."""
+        """'memory memory-md --force' should generate MEMORY.md file."""
         memory_dir = tmp_path / ".memory"
         run_memory(["init", "--path", str(memory_dir)])
-        
+
         # Add some data
         run_memory(["add", "Test fact", "-p", "test", "--path", str(memory_dir)])
-        
+
+        # --force: file may already exist from prior runs (writes to ~/.claude/projects/)
         result = run_memory([
-            "memory-md", "-p", "test",
+            "memory-md", "-p", "test", "--force",
             "--path", str(memory_dir),
         ])
         assert result.returncode == 0
@@ -466,16 +473,15 @@ class TestCLIMemoryMd:
         """'memory memory-md --force' should overwrite existing file."""
         memory_dir = tmp_path / ".memory"
         run_memory(["init", "--path", str(memory_dir)])
-        
+
         run_memory(["add", "Fact", "-p", "test", "--path", str(memory_dir)])
-        
-        # Run twice without force - should warn
-        run_memory(["memory-md", "-p", "test", "--path", str(memory_dir)])
-        
-        # Run with force - should succeed
+
+        # First run: may warn if file already exists in ~/.claude/projects/
+        run_memory(["memory-md", "-p", "test", "--path", str(memory_dir)], check=False)
+
+        # Force overwrite: should always succeed
         result = run_memory([
-            "memory-md", "-p", "test",
-            "--force",
+            "memory-md", "-p", "test", "--force",
             "--path", str(memory_dir),
         ])
         assert result.returncode == 0

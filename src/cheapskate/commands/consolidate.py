@@ -6,7 +6,7 @@ import json
 import shutil
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -93,7 +93,7 @@ def consolidate_memories(
             return 1
 
         print(proc.stdout)
-        db.set_state(f"last_consolidate_{project}", datetime.utcnow().isoformat())
+        db.set_state(f"last_consolidate_{project}", datetime.now(timezone.utc).isoformat())
         db.close()
         return 0
 

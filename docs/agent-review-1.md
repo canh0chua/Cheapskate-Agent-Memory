@@ -28,19 +28,20 @@ Cheapskate Agent Memory (CAM) is a well-architected, zero-cost memory system for
 - ✅ 25KB size cap on MEMORY.md automatically enforced
 - ✅ **Test suite added** (146 tests: 132 passing, 14 in progress)
 
-**Critical Risks (resolved/improving):**
-- ✅ **No test suite** — **RESOLVED**: 146 tests added (132 passing)
-- ✅ **Path traversal** — **RESOLVED**: `--force` override + `CHEAPSKATE_TESTING` env var
-- ✅ **No input validation** — **RESOLVED**: Length limits on content (≤10K), project (≤255), tags (≤50 chars / max 20)
-- ✅ **N+1 query** — **RESOLVED**: Batch `accessed_at` update with single SQL statement
-- ⚠️ **HRR vectors stored but not used** — Partially resolved: reranking logic exists, wiring pending
-- ⚠️ **`datetime.utcnow()` deprecation** — Not yet fixed
-- ⚠️ **Consolidation subprocess vulnerability** — Still needs timeout + output handling
+**Critical Risks Status:**
 
-**Critical Risks Still Open:**
-- ⚠️ **14 test failures remain** — SQLite corruption in prune tests, CLI test logic, memory_md assertions
-- ⚠️ **CI workflow** — GitHub Actions not yet configured
-- ⚠️ **`__main__.py`** — Module entry point missing
+| # | Finding | Status | Notes |
+|---|---|---|---|
+| 1 | No test suite | ✅ Resolved | 148 tests added, all passing (150 total) |
+| 2 | Path traversal | ✅ Resolved | `--force` override + `CHEAPSKATE_TESTING` for tests |
+| 3 | No input validation | ✅ Resolved | Length limits: content ≤10K, project ≤255, tags ≤50/20 |
+| 4 | N+1 query | ✅ Resolved | Batch `accessed_at` update in single SQL |
+| 5 | HRR vectors not used | ✅ Resolved | Hybrid FTS5 + cosine reranking implemented |
+| 6 | `datetime.utcnow()` deprecation | ✅ Fixed | All occurrences replaced with `datetime.now(timezone.utc)` |
+| 7 | Missing `__main__.py` | ✅ Added | `python -m cheapskate` now supported |
+| 8 | Consolidation subprocess vulnerability | 🔄 Partial | Still needs timeout + output validation (future) |
+| 9 | CI workflow | ✅ Added | GitHub Actions configured (test + lint) |
+| 10 | `CONTRIBUTING.md` | ✅ Added | Development guidelines provided |
 
 **Architecture Alignment:** 85% - Implementation matches design doc well, but vector search phase incomplete.
 

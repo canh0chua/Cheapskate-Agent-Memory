@@ -26,8 +26,8 @@ def create_sample_memories(count: int = 50) -> List[Dict]:
         memories.append({
             "id": i + 1,
             "project": "test-project",
-            "timestamp": f"2025-01-{i+1:02d}T12:00:00",
-            "accessed_at": f"2025-01-{i+1:02d}T12:00:00",
+            "timestamp": f"2025-01-{((i % 28) + 1):02d}T12:00:00",
+            "accessed_at": f"2025-01-{((i % 28) + 1):02d}T12:00:00",
             "source": "agent",
             "content": f"Test memory content number {i+1}. This is a sample entry with some text.",
             "abstract": f"Abstract for memory {i+1}",

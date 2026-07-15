@@ -4,7 +4,7 @@ memory stats command - Show statistics: counts per project/source/tag, age distr
 import json
 import sys
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -57,7 +57,7 @@ def memory_stats(memory_dir: Optional[Path] = None, project: Optional[str] = Non
             "Older": 0,
         }
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         today_cutoff = now - timedelta(days=1)
         week_cutoff = now - timedelta(days=7)
         month_cutoff = now - timedelta(days=30)
