@@ -479,6 +479,38 @@ class Database:
         }
 
     # ------------------------------------------------------------------
+    # Session continuity
+    # ------------------------------------------------------------------
+    def set_session_summary(self, project: str, summary: str) -> None:
+        """Store a session summary for project continuity."""
+        with self.transaction() as conn:
+            conn.execute(
+                """
+                INSERT INTO session_summaries (project, summary, date)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                """,
+                (project, summary),
+            )
+
+    def get_last_session(self, project: str) -> Optional[Dict[str, Any]]:
+        """Get the most recent session summary for a project."""
+        conn = self.connect()
+        cursor = conn.execute(
+            """
+            SELECT id, project, date, summary
+            FROM session_summaries
+            WHERE project = ?
+            ORDER BY date DESC
+            LIMIT 1
+            """,
+            (project,),
+        )
+        row = cursor.fetchone()
+        if row:
+            return dict(row)
+        return None
+
+    # ------------------------------------------------------------------
     # Phase 4 helpers
     # ------------------------------------------------------------------
     def prune_memories(
@@ -678,35 +710,6 @@ class Database:
         cursor = conn.execute("SELECT value FROM state WHERE key = ?", (key,))
         row = cursor.fetchone()
         return row["value"] if row else default
-
-    def set_session_summary(self, project: str, summary: str) -> None:
-        """Store a session summary for project continuity."""
-        with self.transaction() as conn:
-            conn.execute(
-                """
-                INSERT INTO session_summaries (project, summary, date)
-                VALUES (?, ?, CURRENT_TIMESTAMP)
-                """,
-                (project, summary),
-            )
-
-    def get_last_session(self, project: str) -> Optional[Dict[str, Any]]:
-        """Get the most recent session summary for a project."""
-        conn = self.connect()
-        cursor = conn.execute(
-            """
-            SELECT id, project, date, summary
-            FROM session_summaries
-            WHERE project = ?
-            ORDER BY id DESC
-            LIMIT 1
-            """,
-            (project,),
-        )
-        row = cursor.fetchone()
-        if row:
-            return dict(row)
-        return None
 
     def __enter__(self):
         self.connect()
