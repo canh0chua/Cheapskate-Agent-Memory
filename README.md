@@ -41,7 +41,7 @@ Inspired by Claude Code's memory, Holographic's LLM-free storage, and tiered mem
 - **SQLite** — persistent storage for memories, topics, rules, and audit logs
 - **FTS5** — SQLite's built-in full-text search engine for keyword queries
 - **HRR (Holographic Reduced Representations)** — deterministic vector encoding via circular convolution, no model needed
-- **FAISS** — optional vector index for fast approximate nearest-neighbor search on large corpora
+- **FAISS** — optional vector index for fast approximate nearest-neighbor search on large corpora (planned for Phase 6)
 
 ---
 
@@ -288,16 +288,31 @@ memory_dir: ~/.memory
 capture:
   max_per_session: 50
   tags_whitelist: [db, infra, api, errors, dev]
+  auto_capture:
+    ports: true       # any port mentioned → auto-add
+    errors: true      # error + fix pair → auto-add
+    commands: true    # non-standard commands → auto-add
+    configs: true     # env vars, package.json deps → auto-add
+    conventions: true # pattern used 3x → add it
 
 forgetting:
-  decay_days: 90          # prune if not accessed in 90 days
-  max_age_days: 365        # hard delete anything older than 1 year
+  decay_days: 90           # prune if not accessed in N days (0 = disabled)
+  max_age_days: 365        # hard delete anything older than N days (0 = disabled)
   include_contradicted: false
   soft_delete: true
 
 consolidate:
   schedule: "0 2 * * *"   # cron: 2am daily
-  trigger_threshold: 100   # trigger if 100+ new memories
+  trigger_threshold: 100   # also trigger if 100+ new memories
+  backend: claude          # claude, ollama, or offline
+  ollama_url: http://localhost:11434
+  ollama_model: llama3
+
+hooks:
+  on_session_start: []
+  on_error: []
+  on_file_edit: []
+  on_session_end: []
 ```
 
 ---

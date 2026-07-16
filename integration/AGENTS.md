@@ -289,27 +289,52 @@ For programmatic skill loading, see [skill-template.md](./skill-template.md). It
 
 ## Integration Status
 
-CAM currently works as a **CLI-orchestrated tool**. Agents invoke it via `subprocess`. The roadmap (see `docs/agent-review-3.md`) plans to add a Python API for direct import.
+CAM supports **three integration methods**: CLI, Python API, and MCP server.
 
-### Current Integration Method (CLI)
+### 1. CLI (subprocess)
 ```bash
 memory add "fact" --project myapp
 memory search "query" --project myapp
 ```
 
-### Planned Integration Method (Python API — coming soon)
+### 2. Python API (direct import)
 ```python
 from cheapskate import MemoryClient
 
 mem = MemoryClient()
 mem.add("fact", project="myapp")
 results = mem.search("query", project="myapp")
+mem.close()
+# or use context manager:
+with MemoryClient() as mem:
+    mem.add("fact", project="myapp")
 ```
 
-### Planned: JSON Output (coming soon)
+### 3. MCP Server (JSON-RPC over stdio)
+```bash
+python -m cheapskate.mcp
+# Sends JSON-RPC 2.0 requests on stdin, responses on stdout
+# Methods: memory_add, memory_search, memory_list, memory_stats, memory_status, memory_suggest, memory_topicify
+```
+
+### 4. JSON Output (all commands)
 ```bash
 memory search "port" --project myapp --json
-# {"results": [...], "count": 5, "query": "port", "project": "myapp"}
+memory list --project myapp --json
+memory stats --project myapp --json
+memory verify --project myapp --json
+memory suggest --project myapp --json
+```
+
+### 5. Hook System
+```yaml
+# ~/.memory/config.yaml
+hooks:
+  on_session_start:
+    - command: "echo 'Session started for {project}'"
+      output: silent
+  on_error:
+    - "echo 'Error occurred'"
 ```
 
 ---

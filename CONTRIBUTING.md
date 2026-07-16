@@ -38,10 +38,15 @@ pytest tests/ --cov=src/cheapskate --cov-report=html
 Key files to understand first:
 
 1. `src/cheapskate/config.py` - Configuration management (YAML-based)
-2. `src/cheapskate/db.py` - Database layer (SQLite + FTS5)
+2. `src/cheapskate/db.py` - Database layer (SQLite + FTS5 + HRR)
 3. `src/cheapskate/hrr.py` - Hyperdimensional Random Representation embeddings
-4. `src/cheapskate/commands/` - CLI commands (init, add, list, search, topicify, etc.)
-5. `src/cheapskate/memory_md.py` - MEMORY.md generation for Claude Code
+4. `src/cheapskate/client.py` - MemoryClient Python API (high-level)
+5. `src/cheapskate/mcp.py` - MCP server (JSON-RPC stdio)
+6. `src/cheapskate/hooks.py` - Hook system (on_session_start, on_error, etc.)
+7. `src/cheapskate/commands/` - CLI commands (init, add, list, search, topicify, suggest, verify, consolidate, etc.)
+8. `src/cheapskate/memory_md.py` - MEMORY.md generation for Claude Code
+9. `src/cheapskate/__init__.py` - Public exports
+10. `src/cheapskate/__main__.py` - CLI entry point and hook runner
 
 ## Development Workflow
 
