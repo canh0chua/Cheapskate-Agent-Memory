@@ -1,16 +1,14 @@
-"""
-memory consolidate command - Dreams-style consolidation via Claude Code CLI, Ollama, or offline fallback.
-"""
+"""memory consolidate command - Dreams-style consolidation via Claude Code CLI, Ollama, or offline fallback."""
 
 import json
 import shutil
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
-
-import requests
 
 from cheapskate.config import Config, default_memory_dir
 from cheapskate.db import Database
@@ -42,15 +40,28 @@ def _build_prompt(rows) -> str:
 
 
 def run_ollama(prompt: str, model: str = "llama3", url: str = "http://localhost:11434") -> str:
-    """Run Ollama model and return generated text."""
-    response = requests.post(
-        f"{url.rstrip('/')}/api/generate",
-        json={"model": model, "prompt": prompt, "stream": False},
-        timeout=60,
+    """Run Ollama model and return generated text using stdlib urllib."""
+    endpoint = f"{url.rstrip('/')}/api/generate"
+    payload = {"model": model, "prompt": prompt, "stream": False}
+    data = json.dumps(payload).encode("utf-8")
+
+    req = urllib.request.Request(
+        endpoint,
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/json"},
     )
-    response.raise_for_status()
-    data = response.json()
-    return data.get("response", "")
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            if resp.status >= 400:
+                raise urllib.error.HTTPError(endpoint, resp.status, "HTTP error", resp.headers, None)
+            body = resp.read().decode("utf-8")
+            result = json.loads(body)
+            return result.get("response", "")
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"Ollama HTTP {e.code}: {e.reason}") from e
+    except Exception as e:
+        raise RuntimeError(f"Ollama request failed: {e}") from e
 
 
 def offline_summarize(memories) -> str:
