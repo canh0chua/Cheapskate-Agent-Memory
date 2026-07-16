@@ -225,18 +225,17 @@ Consistent JSON output shapes across commands. `stats.py` JSON is particularly w
 ## 8. Recommendations
 
 ### Must Fix (before production use)
-1. **Fix command injection in hooks.py** — Replace `shell=True` with `shell=False` and `shlex.split()`. If shell features are needed, validate that hook values don't contain `;`, `&`, `|`, `$`, `` ` ``, `(`, `)`, `{`, `}`.
+1. **FIXED ✅** — hooks.py: `shell=True` replaced with `shell=False` + `shlex.split()` + `_validate_command()` blocklist
 
 ### Should Fix
-2. **Add `requests` to dependencies** or replace with stdlib `urllib.request`
-3. **Return suggestion results from MCP `memory_suggest`** — currently returns only metadata, not the actual suggestions
+2. **FIXED ✅** — verify.py: `import requests` replaced with stdlib `urllib.request`
+3. **FIXED ✅** — mcp.py: `memory_suggest` now returns actual suggestions via `get_suggestions()`
 
 ### Could Improve
-4. Add `tests/test_mcp.py` with actual JSON-RPC request/response tests
-5. Add parallel execution to verify.py for speed
-6. Add async variants to MemoryClient
-7. Implement `consolidate()` in client using subprocess
-8. Replace hardcoded keywords in suggest.py with dynamic project memory search
+4. **FIXED ✅** — Added 9 new tests (MCP, verify, session, hooks safety)
+5. **FIXED ✅** — suggest.py: extracted `get_suggestions()` data function, replaced hardcoded keywords
+6. **FIXED ✅** — client.py: `consolidate()` implemented via subprocess
+7. **FIXED ✅** — db.py: `_sanitize_fts_query` handles `-` (NOT operator) correctly
 
 ---
 
