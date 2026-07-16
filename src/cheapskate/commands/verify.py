@@ -3,24 +3,22 @@ memory verify command - re-verify stored memories and flag stale facts.
 """
 
 import json
-import os
 import re
 import shutil
 import socket
 import sys
+import urllib.request
+import urllib.error
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import requests
-
-from cheapskate.config import Config, default_memory_dir
+from cheapskate.config import Config
 from cheapskate.db import Database
-
 
 PORT_PATTERN = re.compile(r"\bport\s+(\d+)\b", re.IGNORECASE)
 COMMAND_PATTERN = re.compile(r"`([^`]+)`")
 URL_PATTERN = re.compile(r"https?://\S+")
-PATH_PATTERN = re.compile(r"(?<![\w\"'`])(/[\w./\-]+)")
+PATH_PATTERN = re.compile(r"(?<![\w\"'/`])(/[\w./\-]+)")
 IP_PORT_PATTERN = re.compile(r"\b(\d{1,3}(?:\.\d{1,3}){3}):(\d+)\b")
 
 
@@ -64,6 +62,18 @@ def _check_path_pattern(content: str) -> Optional[str]:
         if len(path) > 3 and path.startswith("/"):
             return path
     return None
+
+
+def _check_url(url: str, timeout: float = 3.0) -> Tuple[bool, str]:
+    """Check if a URL is reachable using stdlib urllib."""
+    try:
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status < 400, f"HTTP {resp.status}"
+    except urllib.error.HTTPError as e:
+        return False, f"HTTP {e.code}"
+    except Exception:
+        return False, "request failed"
 
 
 def verify_memories(
@@ -140,13 +150,9 @@ def verify_memories(
 
             url = _check_url_pattern(content)
             if url:
-                try:
-                    resp = requests.get(url, timeout=3, allow_redirects=True)
-                    status = "verified" if resp.ok else "stale"
-                    reason = f"HTTP {resp.status_code}"
-                except Exception:
-                    status = "unknown"
-                    reason = "request failed"
+                ok, msg = _check_url(url)
+                status = "verified" if ok else "stale"
+                reason = msg
                 results.append({
                     "memory_id": memory_id,
                     "content": content,
@@ -178,8 +184,6 @@ def verify_memories(
 
     except Exception as e:
         print(f"Error verifying memories: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc()
         return 1
 
 

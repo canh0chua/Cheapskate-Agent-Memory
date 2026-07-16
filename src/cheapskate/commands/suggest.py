@@ -2,9 +2,9 @@
 memory suggest command — proactively suggest relevant memories from current project.
 """
 
+import json
 import os
 import re
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -26,7 +26,7 @@ def detect_project() -> Optional[str]:
     if git_config.exists():
         try:
             content = git_config.read_text()
-            match = re.search(r'\[\s*remote\s+"origin"\s*\]\s*url\s*=\s*.*[/]([^/]+?)(?:\.git)?$', content, re.MULTILINE)
+            match = re.search(r'\[\s*remote\s+"origin"\s*\]\s*url\s*=.*[/]([^/]+?)(?:\.git)?$', content, re.MULTILINE)
             if match:
                 return match.group(1)
         except Exception:
@@ -36,7 +36,6 @@ def detect_project() -> Optional[str]:
     pkg_json = cwd / "package.json"
     if pkg_json.exists():
         try:
-            import json
             data = json.loads(pkg_json.read_text())
             if "name" in data:
                 name = data["name"].replace("@", "").replace("/", "-")
@@ -57,6 +56,78 @@ def detect_project() -> Optional[str]:
 
     # Fall back to folder name
     return cwd.name
+
+
+def get_suggestions(
+    project: str,
+    memory_dir: Optional[Path] = None,
+    limit: int = 5,
+) -> List[Dict[str, Any]]:
+    """
+    Get suggestion data for a project. Returns structured data, does NOT print.
+
+    Searches for recent memories in the project, deduplicates, and returns
+    the top results sorted by recency.
+
+    Args:
+        project: Project name (must be non-empty)
+        memory_dir: Memory directory path
+        limit: Maximum number of suggestions
+
+    Returns:
+        List of memory dicts with keys: id, project, content, source, confidence, timestamp, tags
+    """
+    if not project:
+        return []
+
+    # Validate memory path
+    try:
+        validated_dir = validate_memory_path(memory_dir, force=False)
+    except Exception:
+        return []
+
+    config_path = validated_dir / "config.yaml"
+    config = Config(config_path)
+    db_path = config.database_path
+
+    if not db_path.exists():
+        return []
+
+    db = Database(db_path)
+    db.connect()
+
+    # Search for relevant memories using the project name itself + common terms
+    all_results = []
+
+    # Search by project name (catches project-specific memories)
+    results = db.search_memories(query=project, project=project, limit=20)
+    all_results.extend(results)
+
+    # Search common infrastructure terms
+    for kw in ["port", "error", "config", "setup", "command", "convention", "install", "env"]:
+        results = db.search_memories(query=kw, project=project, limit=5)
+        all_results.extend(results)
+
+    # Dedupe by id, sort by accessed_at, take top N
+    seen = set()
+    unique: List[Dict[str, Any]] = []
+    for r in sorted(all_results, key=lambda x: x.get("accessed_at", ""), reverse=True):
+        rid = r.get("id")
+        if rid not in seen:
+            seen.add(rid)
+            # Parse tags from metadata
+            if r.get("metadata"):
+                try:
+                    meta = json.loads(r["metadata"])
+                    r["tags"] = meta.get("tags", [])
+                except Exception:
+                    r["tags"] = []
+            else:
+                r["tags"] = []
+            unique.append(r)
+
+    db.close()
+    return unique[:limit]
 
 
 def suggest_memories(
@@ -88,55 +159,16 @@ def suggest_memories(
 
         if not project:
             if json_output:
-                import json
                 print(json.dumps({"error": "No project specified and could not auto-detect", "suggestions": []}))
             else:
                 print("Error: No project specified and could not auto-detect from current directory.", file=sys.stderr)
             return 1
 
-        # Validate memory path
-        validated_dir = validate_memory_path(memory_dir, force=False)
-        config_path = validated_dir / "config.yaml"
-        config = Config(config_path)
-        db_path = config.database_path
-
-        if not db_path.exists():
-            if json_output:
-                import json
-                print(json.dumps({"error": "Memory not initialized", "suggestions": []}))
-            else:
-                print("Memory not initialized. Run 'memory init' first.", file=sys.stderr)
-            return 1
-
-        # Connect to database
-        db = Database(db_path)
-        db.connect()
-
-        # Search for relevant memories from last 30 days
-        keywords = ["port", "error", "convention", "command", "config", "setup", "install", "auth"]
-        all_results = []
-
-        for kw in keywords:
-            results = db.search_memories(query=kw, project=project, limit=10)
-            for r in results:
-                r["relevance_keywords"] = kw
-            all_results.extend(results)
-
-        # Dedupe by id, sort by accessed_at, take top N
-        seen = set()
-        unique = []
-        for r in sorted(all_results, key=lambda x: x.get("accessed_at", ""), reverse=True):
-            if r["id"] not in seen:
-                seen.add(r["id"])
-                unique.append(r)
-
-        suggestions = unique[:limit]
-
-        db.close()
+        # Use the data function
+        suggestions = get_suggestions(project, memory_dir, limit)
 
         # Output
         if json_output:
-            import json
             print(json.dumps({
                 "project": project,
                 "count": len(suggestions),
@@ -150,14 +182,7 @@ def suggest_memories(
             print(f"Top {len(suggestions)} memories for '{project}':")
             print("-" * 60)
             for i, m in enumerate(suggestions, 1):
-                tags = ""
-                if m.get("metadata"):
-                    try:
-                        import json
-                        meta = json.loads(m["metadata"])
-                        tags = ", ".join(meta.get("tags", []))
-                    except Exception:
-                        pass
+                tags = ", ".join(m.get("tags", []))
                 print(f"\n{i}. {m['content'][:100]}")
                 if m.get("source"):
                     print(f"   Source: {m['source']} | Confidence: {m.get('confidence', 'N/A')}")
@@ -168,7 +193,6 @@ def suggest_memories(
 
     except Exception as e:
         if json_output:
-            import json
             print(json.dumps({"error": str(e), "suggestions": []}))
         else:
             print(f"Error suggesting memories: {e}", file=sys.stderr)

@@ -11,6 +11,7 @@ Usage:
 import json
 import os
 import sqlite3
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -307,15 +308,19 @@ class MemoryClient:
         """
         Consolidate memories using LLM synthesis.
 
-        Note: This requires Claude Code CLI to be installed.
+        Note: This requires a configured LLM backend (claude, ollama, or offline).
 
         Args:
-            project: Project name (auto-detected if None)
+            project: Project name (defaults to 'default' if None)
 
         Returns:
-            Dict with consolidation result
+            Dict with keys: returncode, stdout, stderr
         """
-        raise NotImplementedError(
-            "consolidate() requires subprocess call to Claude CLI. "
-            "Use the CLI: memory consolidate --project <name>"
-        )
+        import subprocess
+
+        if project is None:
+            project = "default"
+
+        cmd = [sys.executable, "-m", "cheapskate.cli", "consolidate", "--project", project]
+        result = subprocess.run(cmd, capture_output=True, text=True, env=os.environ.copy())
+        return {"returncode": result.returncode, "stdout": result.stdout, "stderr": result.stderr}

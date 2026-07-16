@@ -358,12 +358,14 @@ class Database:
         words = query.split()
         sanitized_words = []
         for word in words:
-            # FTS5 '+' is an AND operator - strip it since we can't escape it
-            clean = word.replace('+', '')
+            # FTS5 '+' is AND operator, '-' is NOT operator — strip both
+            clean = word.replace('+', '').replace('-', ' ')
             # Remove other FTS5 special characters
             clean = re.sub(r'["^()\[\]{}:*]', '', clean)
-            if len(clean) >= 1:
-                sanitized_words.append(clean + "*")
+            # Each resulting token becomes a prefix query
+            for token in clean.split():
+                if len(token) >= 1:
+                    sanitized_words.append(token + "*")
         return " ".join(sanitized_words)
 
     def get_memory(self, memory_id: int) -> Optional[Dict[str, Any]]:
@@ -696,7 +698,7 @@ class Database:
             SELECT id, project, date, summary
             FROM session_summaries
             WHERE project = ?
-            ORDER BY date DESC
+            ORDER BY id DESC
             LIMIT 1
             """,
             (project,),

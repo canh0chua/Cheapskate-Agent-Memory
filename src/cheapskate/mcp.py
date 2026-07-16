@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from cheapskate.client import MemoryClient
-from cheapskate.commands.suggest import suggest_memories
+from cheapskate.commands.suggest import get_suggestions
 
 
 TOOL_HANDLERS = {
@@ -77,29 +77,22 @@ def _handle_request(request: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _handle_suggest(req_id: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle memory_suggest — returns actual suggestions via get_suggestions()."""
+    project = params.get("project", "default")
+    limit = int(params.get("limit", 5))
+
     memory_dir = params.get("memory_dir")
     if isinstance(memory_dir, str):
         memory_dir = Path(memory_dir)
 
-    project = params.get("project")
-    limit = int(params.get("limit", 5))
-    auto_detect = bool(params.get("auto_detect", True))
-
-    exit_code = suggest_memories(
-        project=project,
-        memory_dir=memory_dir,
-        limit=limit,
-        auto_detect=auto_detect,
-        json_output=True,
-    )
+    suggestions = get_suggestions(project=project, memory_dir=memory_dir, limit=limit)
 
     return {
         "jsonrpc": "2.0",
         "result": {
-            "exit_code": exit_code,
             "project": project,
-            "limit": limit,
-            "auto_detect": auto_detect,
+            "count": len(suggestions),
+            "suggestions": suggestions,
         },
         "id": req_id,
     }
